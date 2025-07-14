@@ -1,4 +1,4 @@
-import GameInterface from '../components/TestScreen'
+import GameInterface from '../components/TestScreen2'
 
 export default function Home() {
   return (

@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Camera, Hand, Target, CheckCircle, AlertCircle, Play, Maximize } from 'lucide-react';
+import { Camera, Hand, Target, CheckCircle, AlertCircle, Play, Maximize, Clock } from 'lucide-react';
 
 // Types
 interface HandLandmark {
@@ -83,7 +83,7 @@ const QUIZ_QUESTIONS = [
   {
     question: "Thành phố nào có biệt danh 'Thành phố Hoa phượng đỏ'?",
     choices: ['Hà Nội', 'Huế', 'Hải Phòng', 'Đà Nẵng'],
-    correctAnswer: 'c'
+    correctAnswer: 'd'
   },
   {
     question: "Sông nào dài nhất Việt Nam?",
@@ -92,25 +92,109 @@ const QUIZ_QUESTIONS = [
   }
 ];
 
-// MediaPipe script loading utility
+// Timer configuration
+const QUESTION_TIME_LIMIT = 15; // seconds
+
+// Improved MediaPipe script loading utility
 const loadMediaPipeScript = (): Promise<void> => {
   return new Promise((resolve, reject) => {
-    if (window.Hands) {
+    // Check if already loaded
+    if (window.Hands && window.Camera) {
       resolve();
       return;
     }
 
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js';
-    script.onload = () => {
-      const cameraScript = document.createElement('script');
-      cameraScript.src = 'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js';
-      cameraScript.onload = () => resolve();
-      cameraScript.onerror = () => reject(new Error('Failed to load camera utils'));
-      document.head.appendChild(cameraScript);
+    // Clear any existing scripts first
+    const existingScripts = document.querySelectorAll('script[src*="mediapipe"]');
+    existingScripts.forEach(script => script.remove());
+
+    // Multiple CDN options
+    const cdnOptions = [
+      // Option 1: JSDelivr with specific version
+      {
+        hands: 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1635986972/hands.js',
+        camera: 'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1620248257/camera_utils.js'
+      },
+      // Option 2: JSDelivr latest
+      {
+        hands: 'https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js',
+        camera: 'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js'
+      },
+      // Option 3: UNPKG
+      {
+        hands: 'https://unpkg.com/@mediapipe/hands@0.4.1635986972/hands.js',
+        camera: 'https://unpkg.com/@mediapipe/camera_utils@0.3.1620248257/camera_utils.js'
+      }
+    ];
+
+    let currentCdnIndex = 0;
+
+    const tryLoadCdn = () => {
+      if (currentCdnIndex >= cdnOptions.length) {
+        // All CDNs failed, fall back to simple mode
+        console.warn('All MediaPipe CDNs failed, falling back to simple mode');
+        reject(new Error('All MediaPipe CDN sources failed'));
+        return;
+      }
+
+      const currentCdn = cdnOptions[currentCdnIndex];
+      console.log(`Trying CDN option ${currentCdnIndex + 1}:`, currentCdn);
+
+      // Load Hands first
+      const handsScript = document.createElement('script');
+      handsScript.src = currentCdn.hands;
+      handsScript.crossOrigin = 'anonymous';
+      
+      handsScript.onload = () => {
+        console.log('Hands script loaded successfully');
+        
+        // Then load Camera Utils
+        const cameraScript = document.createElement('script');
+        cameraScript.src = currentCdn.camera;
+        cameraScript.crossOrigin = 'anonymous';
+        
+        cameraScript.onload = () => {
+          console.log('Camera script loaded successfully');
+          
+          // Wait for scripts to fully initialize
+          setTimeout(() => {
+            if (window.Hands && window.Camera) {
+              console.log('MediaPipe modules available');
+              resolve();
+            } else {
+              console.warn('MediaPipe modules not available after loading');
+              // Try next CDN
+              currentCdnIndex++;
+              tryLoadCdn();
+            }
+          }, 1000);
+        };
+        
+        cameraScript.onerror = (error) => {
+          console.log(`Failed to load camera utils from CDN ${currentCdnIndex + 1}:`, error);
+          cameraScript.remove();
+          handsScript.remove();
+          // Try next CDN
+          currentCdnIndex++;
+          tryLoadCdn();
+        };
+        
+        document.head.appendChild(cameraScript);
+      };
+      
+      handsScript.onerror = (error) => {
+        console.log(`Failed to load hands from CDN ${currentCdnIndex + 1}:`, error);
+        handsScript.remove();
+        // Try next CDN
+        currentCdnIndex++;
+        tryLoadCdn();
+      };
+      
+      document.head.appendChild(handsScript);
     };
-    script.onerror = () => reject(new Error('Failed to load MediaPipe'));
-    document.head.appendChild(script);
+
+    // Start trying CDNs
+    tryLoadCdn();
   });
 };
 
@@ -129,7 +213,7 @@ const detectPinchGesture = (landmarks: HandLandmark[]): boolean => {
   const middleTip = landmarks[12];
   const distance = calculateDistance(indexTip, middleTip);
   
-  return distance < 0.02; // Slightly increased threshold for better detection
+  return distance < 0.02;
 };
 
 const isPointInChoice = (x: number, y: number, choice: QuizChoice): boolean => {
@@ -150,6 +234,9 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const handsInstanceRef = useRef<any>(null);
+  const cameraInstanceRef = useRef<any>(null);
   
   const [isLoading, setIsLoading] = useState(true);
   const [loadingError, setLoadingError] = useState<string | null>(null);
@@ -165,6 +252,11 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [screenSize, setScreenSize] = useState({ width: window.innerWidth, height: window.innerHeight });
   const [isFullScreen, setIsFullScreen] = useState(false);
+  
+  // Timer states
+  const [timeLeft, setTimeLeft] = useState(QUESTION_TIME_LIMIT);
+  const [isTimerActive, setIsTimerActive] = useState(false);
+  const [lastHoveredChoice, setLastHoveredChoice] = useState<string | null>(null);
 
   // Handle screen resize
   useEffect(() => {
@@ -175,6 +267,59 @@ const GameScreen: React.FC<GameScreenProps> = ({
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Timer effect
+  useEffect(() => {
+    if (isTimerActive && timeLeft > 0 && !selectedChoice && !showResult) {
+      timerRef.current = setTimeout(() => {
+        setTimeLeft(prev => prev - 1);
+      }, 1000);
+    } else if (timeLeft === 0 && !selectedChoice && !showResult) {
+      // Time's up - auto select based on last hovered choice or random
+      handleTimeUp();
+    }
+
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    };
+  }, [isTimerActive, timeLeft, selectedChoice, showResult]);
+
+  // Start timer when question changes
+  useEffect(() => {
+    if (!showResult && selectedChoice === null) {
+      setTimeLeft(QUESTION_TIME_LIMIT);
+      setIsTimerActive(true);
+      setLastHoveredChoice(null);
+    }
+  }, [currentQuestion, showResult, selectedChoice]);
+
+  // Update last hovered choice when hand hovers over options
+  useEffect(() => {
+    if (hoveredChoice && !selectedChoice) {
+      setLastHoveredChoice(hoveredChoice);
+    }
+  }, [hoveredChoice, selectedChoice]);
+
+  // Handle time up
+  const handleTimeUp = () => {
+    setIsTimerActive(false);
+    
+    // Auto-select based on last hovered choice or default to 'a'
+    const choiceToSelect = lastHoveredChoice || 'a';
+    handleChoiceSelect(choiceToSelect, true); // true indicates auto-selection
+  };
+
+  // Reset timer
+  const resetTimer = () => {
+    setTimeLeft(QUESTION_TIME_LIMIT);
+    setIsTimerActive(false);
+    setLastHoveredChoice(null);
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
+  };
 
   // Toggle fullscreen
   const toggleFullScreen = () => {
@@ -208,28 +353,56 @@ const GameScreen: React.FC<GameScreenProps> = ({
     }));
   };
 
-  // Initialize MediaPipe Hands
+  // Cleanup function
+  const cleanupMediaPipe = useCallback(() => {
+    try {
+      if (cameraInstanceRef.current && cameraInstanceRef.current.stop) {
+        cameraInstanceRef.current.stop();
+        cameraInstanceRef.current = null;
+      }
+      if (handsInstanceRef.current && handsInstanceRef.current.close) {
+        handsInstanceRef.current.close();
+        handsInstanceRef.current = null;
+      }
+    } catch (error) {
+      console.log('Error during MediaPipe cleanup:', error);
+    }
+  }, []);
+
+  // Initialize MediaPipe Hands with better error handling
   useEffect(() => {
     if (!handTrackingEnabled || !cameraStream) return;
 
-    let hands: any = null;
-    let camera: any = null;
+    let isMounted = true;
 
     const initializeHandTracking = async () => {
       try {
         setIsLoading(true);
         setLoadingError(null);
 
+        // Cleanup any existing instances
+        cleanupMediaPipe();
+
+        // Load MediaPipe scripts
         await loadMediaPipeScript();
+        
+        if (!isMounted) return;
+
+        // Wait for scripts to be ready
         await new Promise(resolve => setTimeout(resolve, 1000));
 
-        if (!window.Hands) {
-          throw new Error('MediaPipe Hands not available');
+        if (!window.Hands || !window.Camera) {
+          throw new Error('MediaPipe modules not available');
         }
 
-        hands = new window.Hands({
-          locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        // Initialize Hands
+        const hands = new window.Hands({
+          locateFile: (file: string) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1635986972/${file}`;
+          }
         });
+
+        handsInstanceRef.current = hands;
 
         hands.setOptions({
           maxNumHands: 1,
@@ -240,41 +413,48 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
         hands.onResults(onResults);
 
-        if (videoRef.current && window.Camera) {
-          camera = new window.Camera(videoRef.current, {
+        // Initialize Camera
+        if (videoRef.current && isMounted) {
+          const camera = new window.Camera(videoRef.current, {
             onFrame: async () => {
-              if (videoRef.current && hands) {
-                await hands.send({ image: videoRef.current });
+              if (videoRef.current && handsInstanceRef.current && isMounted) {
+                try {
+                  await handsInstanceRef.current.send({ image: videoRef.current });
+                } catch (error) {
+                  console.log('Error sending frame to MediaPipe:', error);
+                }
               }
             },
             width: 1280,
             height: 720
           });
 
+          cameraInstanceRef.current = camera;
           await camera.start();
-          setIsLoading(false);
+          
+          if (isMounted) {
+            setIsLoading(false);
+          }
         } else {
-          throw new Error('Camera initialization failed');
+          throw new Error('Video element not available');
         }
-      } catch (error:any) {
-        console.error('Error initializing hand tracking:', error);
-        setLoadingError(error.message || 'Failed to initialize hand tracking');
-        setIsLoading(false);
-        setUseSimpleMode(true);
+      } catch (error: any) {
+        console.log('Error initializing hand tracking:', error);
+        if (isMounted) {
+          setLoadingError(error.message || 'Failed to initialize hand tracking');
+          setIsLoading(false);
+          setUseSimpleMode(true);
+        }
       }
     };
 
     initializeHandTracking();
 
     return () => {
-      try {
-        if (camera && camera.stop) camera.stop();
-        if (hands && hands.close) hands.close();
-      } catch (error) {
-        console.error('Error cleaning up:', error);
-      }
+      isMounted = false;
+      cleanupMediaPipe();
     };
-  }, [handTrackingEnabled, cameraStream]);
+  }, [handTrackingEnabled, cameraStream, cleanupMediaPipe]);
 
   // Handle hand tracking results
   const onResults = useCallback((results: HandResults) => {
@@ -417,9 +597,10 @@ const GameScreen: React.FC<GameScreenProps> = ({
   };
 
   // Handle choice selection
-  const handleChoiceSelect = (choiceId: string) => {
+  const handleChoiceSelect = (choiceId: string, isAutoSelected: boolean = false) => {
     if (selectedChoice || showResult) return;
 
+    setIsTimerActive(false);
     setSelectedChoice(choiceId);
     const correct = choiceId === QUIZ_QUESTIONS[currentQuestion].correctAnswer;
     setIsCorrect(correct);
@@ -430,18 +611,22 @@ const GameScreen: React.FC<GameScreenProps> = ({
     
     setShowResult(true);
     
-    // Move to next question after 2 seconds
+    // Show result message
+    const resultDelay = isAutoSelected ? 3000 : 2500; // Longer delay for auto-selected answers
+    
+    // Move to next question after delay
     setTimeout(() => {
       if (currentQuestion < QUIZ_QUESTIONS.length - 1) {
         setCurrentQuestion(currentQuestion + 1);
         setSelectedChoice(null);
         setShowResult(false);
         setIsCorrect(null);
+        resetTimer();
       } else {
         // Quiz finished
         setShowResult(true);
       }
-    }, 2500);
+    }, resultDelay);
   };
 
   // Reset quiz
@@ -451,6 +636,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
     setShowResult(false);
     setIsCorrect(null);
     setScore(0);
+    resetTimer();
   };
 
   // Setup video stream
@@ -459,6 +645,15 @@ const GameScreen: React.FC<GameScreenProps> = ({
       videoRef.current.srcObject = cameraStream;
     }
   }, [cameraStream]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    };
+  }, []);
 
   if (!handTrackingEnabled || !cameraStream) {
     return (
@@ -478,6 +673,16 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const currentQuiz = QUIZ_QUESTIONS[currentQuestion];
   const isQuizFinished = currentQuestion >= QUIZ_QUESTIONS.length;
   const currentChoices = getCurrentChoices();
+
+  // Calculate timer progress percentage
+  const timerProgress = ((QUESTION_TIME_LIMIT - timeLeft) / QUESTION_TIME_LIMIT) * 100;
+  
+  // Determine timer color based on time left
+  const getTimerColor = () => {
+    if (timeLeft <= 3) return 'text-red-500';
+    if (timeLeft <= 7) return 'text-yellow-500';
+    return 'text-green-500';
+  };
 
   return (
     <div 
@@ -531,6 +736,38 @@ const GameScreen: React.FC<GameScreenProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Timer Display */}
+        {!isQuizFinished && !showResult && (
+          <div className="absolute top-24 right-6">
+            <div className="bg-black/80 rounded-xl p-4 text-white">
+              <div className="flex items-center gap-3 mb-2">
+                <Clock className={`w-6 h-6 ${getTimerColor()}`} />
+                <span className={`text-2xl font-bold font-mono ${getTimerColor()}`}>
+                  {timeLeft}s
+                </span>
+              </div>
+              
+              {/* Timer Progress Bar */}
+              <div className="w-32 h-2 bg-white/20 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all duration-1000 rounded-full ${
+                    timeLeft <= 3 ? 'bg-red-500' :
+                    timeLeft <= 7 ? 'bg-yellow-500' : 'bg-green-500'
+                  }`}
+                  style={{ width: `${timerProgress}%` }}
+                />
+              </div>
+              
+              {/* Last hovered indicator */}
+              {lastHoveredChoice && timeLeft <= 5 && (
+                <div className="mt-2 text-xs text-orange-300">
+                  Auto-select: {lastHoveredChoice.toUpperCase()}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Loading/Error States */}
         {isLoading && (
@@ -592,7 +829,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
         ) : (
           <>
             {/* Question Display */}
-            <div className="absolute top-1/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl px-6">
+            <div className="absolute top-1/6 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl px-6">
               <div className="bg-black/80 rounded-xl p-6 text-white text-center">
                 <div className="flex items-center justify-center mb-4">
                   <h2 className="text-2xl font-bold mr-4">
@@ -616,6 +853,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
                 className={`
                   absolute transition-all duration-200 pointer-events-auto cursor-pointer
                   ${hoveredChoice === choice.id ? 'scale-110' : 'scale-100'}
+                  ${lastHoveredChoice === choice.id && timeLeft <= 5 ? 'animate-pulse' : ''}
                 `}
                 style={{
                   left: `${choice.position.x}px`,
@@ -634,6 +872,8 @@ const GameScreen: React.FC<GameScreenProps> = ({
                   ${selectedChoice === choice.id ? 
                     (isCorrect ? 'border-green-400 bg-green-500/50' : 'border-red-400 bg-red-500/50') 
                     : ''}
+                  ${lastHoveredChoice === choice.id && timeLeft <= 5 ? 
+                    'border-yellow-400 bg-yellow-500/20' : ''}
                 `}>
                   <div className={`
                     w-16 h-16 rounded-full flex items-center justify-center font-bold text-2xl text-white
@@ -645,7 +885,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
                   </div>
                   <span className="text-2xl font-medium text-white flex-1">{choice.text}</span>
                   
-                  {hoveredChoice === choice.id && (
+                  {hoveredChoice === choice.id && !selectedChoice && (
                     <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center">
                       <Target className="w-5 h-5 text-white" />
                     </div>
@@ -656,6 +896,12 @@ const GameScreen: React.FC<GameScreenProps> = ({
                       isCorrect ? 'bg-green-500' : 'bg-red-500'
                     }`}>
                       <CheckCircle className="w-5 h-5 text-white" />
+                    </div>
+                  )}
+                  
+                  {lastHoveredChoice === choice.id && timeLeft <= 5 && timeLeft > 0 && !selectedChoice && (
+                    <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center animate-pulse">
+                      <Clock className="w-5 h-5 text-white" />
                     </div>
                   )}
                 </div>
@@ -670,10 +916,50 @@ const GameScreen: React.FC<GameScreenProps> = ({
                   ${isCorrect ? 'bg-green-600/90' : 'bg-red-600/90'}
                 `}>
                   {isCorrect ? (
-                    <span>✅ Correct!</span>
+                    <div className="flex items-center gap-3">
+                      <CheckCircle className="w-10 h-10" />
+                      <span>Chính xác!</span>
+                    </div>
                   ) : (
-                    <span>❌ Wrong! Answer: {QUIZ_QUESTIONS[currentQuestion].correctAnswer.toUpperCase()}</span>
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="flex items-center gap-3">
+                        <AlertCircle className="w-10 h-10" />
+                        <span>Sai rồi!</span>
+                      </div>
+                      <div className="text-lg">
+                        Đáp án đúng: {QUIZ_QUESTIONS[currentQuestion].correctAnswer.toUpperCase()}
+                      </div>
+                    </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Time Up Warning */}
+            {timeLeft <= 3 && timeLeft > 0 && !selectedChoice && !showResult && (
+              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                <div className="bg-red-600/90 rounded-xl p-6 text-white text-center animate-pulse">
+                  <Clock className="w-12 h-12 mx-auto mb-4" />
+                  <h3 className="text-2xl font-bold mb-2">Thời gian sắp hết!</h3>
+                  <p className="text-lg">
+                    {lastHoveredChoice ? 
+                      `Sẽ tự động chọn: ${lastHoveredChoice.toUpperCase()}` : 
+                      'Hãy chỉ vào một đáp án!'
+                    }
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Auto-select notification */}
+            {timeLeft === 0 && !selectedChoice && !showResult && (
+              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                <div className="bg-yellow-600/90 rounded-xl p-6 text-white text-center">
+                  <Clock className="w-12 h-12 mx-auto mb-4" />
+                  <h3 className="text-2xl font-bold mb-2">Hết giờ!</h3>
+                  <p className="text-lg">
+                    Tự động chọn: {(lastHoveredChoice || 'A').toUpperCase()}
+                  </p>
                 </div>
               </div>
             )}
@@ -683,20 +969,35 @@ const GameScreen: React.FC<GameScreenProps> = ({
         {/* Instructions */}
         <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 text-white text-center">
           <div className="bg-black/60 rounded-lg p-4">
-            <h3 className="text-lg font-semibold mb-2">How to Play:</h3>
+            <h3 className="text-lg font-semibold mb-2">Cách chơi:</h3>
             <div className="text-sm space-y-1">
               {useSimpleMode ? (
-                <p>• Click on your answer choice</p>
+                <p>• Nhấp vào đáp án của bạn</p>
               ) : (
                 <>
-                  <p>• Point your index finger at an answer choice</p>
-                  <p>• Pinch (touch index finger with middle finger) to select</p>
-                  <p>• Orange highlight shows where you're pointing</p>
+                  <p>• Chỉ ngón tay trỏ vào đáp án</p>
+                  <p>• Véo (chạm ngón trỏ với ngón giữa) để chọn ngay</p>
+                  <p>• Màu cam hiển thị vị trí bạn đang chỉ</p>
+                  <p>• Có {QUESTION_TIME_LIMIT} giây cho mỗi câu hỏi</p>
+                  <p>• Tự động chọn đáp án cuối cùng bạn chỉ vào khi hết giờ</p>
                 </>
               )}
             </div>
           </div>
         </div>
+
+        {/* MediaPipe Status (for debugging) */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="absolute bottom-32 left-6 text-white text-xs">
+            <div className="bg-black/60 rounded p-2">
+              <div>MediaPipe Status:</div>
+              <div>Loading: {isLoading ? 'Yes' : 'No'}</div>
+              <div>Error: {loadingError || 'None'}</div>
+              <div>Simple Mode: {useSimpleMode ? 'Yes' : 'No'}</div>
+              <div>Hand Position: {handPosition ? `${Math.round(handPosition.x)}, ${Math.round(handPosition.y)}` : 'None'}</div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
