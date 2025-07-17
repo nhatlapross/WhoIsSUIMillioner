@@ -91,7 +91,7 @@ export const useWebSocket = (): UseWebSocketReturn => {
     // Production trên Render
     if (process.env.NODE_ENV === 'production') {
       // Render tự động set NEXT_PUBLIC_WS_URL từ render.yaml
-      return process.env.NEXT_PUBLIC_WS_URL || 'wss://sui-millionaire-websocket.onrender.com';
+      return process.env.NEXT_PUBLIC_WS_URL || 'wss://whoissuimillioner.onrender.com';
     }
 
     // Development local
