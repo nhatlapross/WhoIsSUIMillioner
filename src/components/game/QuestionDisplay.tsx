@@ -1,4 +1,4 @@
-// components/QuestionDisplay.tsx
+// components/game/QuestionDisplay.tsx
 import React from 'react';
 import { QuizQuestion } from '@/types/game';
 

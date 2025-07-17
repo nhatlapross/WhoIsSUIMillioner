@@ -1,4 +1,4 @@
-// components/GameHeader.tsx
+// components/game/GameHeader.tsx
 import React from 'react';
 import { Hand, Maximize, Home } from 'lucide-react';
 

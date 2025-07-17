@@ -1,4 +1,4 @@
-// components/HandTrackingCanvas.tsx
+// components/game/HandTrackingCanvas.tsx
 import React, { useRef, useEffect, useCallback } from 'react';
 import { Target, Hand, AlertCircle, Wifi, WifiOff } from 'lucide-react';
 import { HandResults, HandLandmark } from '@/types/game';
@@ -57,15 +57,17 @@ const HandTrackingCanvas: React.FC<HandTrackingCanvasProps> = ({
       
       if (startPoint && endPoint) {
         ctx.beginPath();
-        ctx.moveTo(startPoint.x * width, startPoint.y * height);
-        ctx.lineTo(endPoint.x * width, endPoint.y * height);
+        // Flip x coordinates to match the flipped video
+        ctx.moveTo((1 - startPoint.x) * width, startPoint.y * height);
+        ctx.lineTo((1 - endPoint.x) * width, endPoint.y * height);
         ctx.stroke();
       }
     });
 
     // Draw landmarks
     landmarks.forEach((landmark, index) => {
-      const x = landmark.x * width;
+      // Flip x coordinate to match the flipped video
+      const x = (1 - landmark.x) * width;
       const y = landmark.y * height;
       
       // Different colors for different parts
@@ -222,8 +224,8 @@ const HandTrackingCanvas: React.FC<HandTrackingCanvasProps> = ({
               <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent mx-auto"></div>
               <Hand className="w-6 h-6 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-blue-400" />
             </div>
-            <h3 className="text-xl font-bold mb-2">Initializing Hand Tracking</h3>
-            <p className="text-blue-300 text-sm">Loading MediaPipe models...</p>
+            <h3 className="text-xl font-bold mb-2">Khởi tạo Hand Tracking</h3>
+            <p className="text-blue-300 text-sm">Đang tải MediaPipe models...</p>
             <div className="mt-4 flex justify-center">
               <div className="flex space-x-1">
                 <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
@@ -244,11 +246,11 @@ const HandTrackingCanvas: React.FC<HandTrackingCanvasProps> = ({
                 <AlertCircle className="w-8 h-8 text-red-200" />
               </div>
             </div>
-            <h3 className="text-xl font-bold mb-2">Hand Tracking Error</h3>
+            <h3 className="text-xl font-bold mb-2">Lỗi Hand Tracking</h3>
             <p className="text-red-100 text-sm mb-3">{loadingError}</p>
             <div className="bg-red-500/20 rounded-lg p-3 border border-red-400/30">
               <p className="text-red-100 text-xs">
-                🖱️ Switching to click mode - you can still play by clicking on answers!
+                🖱️ Chuyển sang chế độ click - bạn vẫn có thể chơi bằng cách click vào đáp án!
               </p>
             </div>
           </div>
@@ -273,7 +275,7 @@ const HandTrackingCanvas: React.FC<HandTrackingCanvasProps> = ({
                 </>
               )}
               <span className="text-sm font-medium text-white">
-                {handPosition ? 'Hand Detected' : 'No Hand'}
+                {handPosition ? 'Phát hiện tay' : 'Không có tay'}
               </span>
             </div>
 
@@ -292,14 +294,14 @@ const HandTrackingCanvas: React.FC<HandTrackingCanvasProps> = ({
           {handPosition && (
             <div className="mt-2 pt-2 border-t border-white/10">
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400">Tracking Quality:</span>
+                <span className="text-xs text-gray-400">Chất lượng:</span>
                 <div className="flex gap-1">
                   <div className="w-2 h-2 rounded-full bg-green-500"></div>
                   <div className="w-2 h-2 rounded-full bg-green-500"></div>
                   <div className="w-2 h-2 rounded-full bg-green-500"></div>
                   <div className="w-2 h-2 rounded-full bg-gray-500"></div>
                 </div>
-                <span className="text-xs text-green-400">Good</span>
+                <span className="text-xs text-green-400">Tốt</span>
               </div>
             </div>
           )}
@@ -319,10 +321,10 @@ const HandTrackingCanvas: React.FC<HandTrackingCanvasProps> = ({
           <div className="bg-orange-500/90 text-white px-3 py-2 rounded-lg text-sm font-bold backdrop-blur-sm border border-orange-400/50 shadow-lg">
             <div className="flex items-center gap-2">
               <Target className="w-4 h-4" />
-              <span>Choice {hoveredChoice.toUpperCase()}</span>
+              <span>Đáp án {hoveredChoice.toUpperCase()}</span>
             </div>
             <div className="text-xs text-orange-100 mt-1">
-              Hold position to auto-select
+              Giữ vị trí để tự động chọn
             </div>
           </div>
           {/* Arrow pointing to hand */}
@@ -337,13 +339,13 @@ const HandTrackingCanvas: React.FC<HandTrackingCanvasProps> = ({
         <div className="absolute bottom-1/3 left-1/2 transform -translate-x-1/2 z-20">
           <div className="bg-blue-600/90 rounded-xl p-6 text-white text-center backdrop-blur-md border border-blue-400/30 max-w-md">
             <Hand className="w-12 h-12 mx-auto mb-4 text-blue-200" />
-            <h3 className="text-lg font-bold mb-2">Show Your Hand</h3>
+            <h3 className="text-lg font-bold mb-2">Đưa tay lên camera</h3>
             <p className="text-blue-100 text-sm">
-              Hold your hand up in front of the camera to start tracking. Point with your index finger to select answers.
+              Giữ tay trước camera để bắt đầu tracking. Dùng ngón trỏ để chỉ vào đáp án muốn chọn.
             </p>
             <div className="mt-4 flex justify-center items-center gap-2 text-xs text-blue-200">
               <div className="w-2 h-2 bg-blue-400 rounded-full animate-ping"></div>
-              <span>Make sure you have good lighting</span>
+              <span>Đảm bảo ánh sáng đủ tốt</span>
             </div>
           </div>
         </div>

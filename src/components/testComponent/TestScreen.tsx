@@ -1,7 +1,7 @@
 'use client';
 import React from 'react';
 import { useCameraPermission } from '@/hooks/useCameraPermission';
-import GameScreen from '@/components/GameScreen';
+import GameScreen from '@/components/testComponent/GameScreen';
 
 const App: React.FC = () => {
   const { status, stream, requestPermission, resetPermission } = useCameraPermission();

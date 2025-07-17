@@ -1,4 +1,4 @@
-// components/GameNotifications.tsx
+// components/game/GameNotifications.tsx
 import React from 'react';
 import { CheckCircle, AlertCircle, Clock, AlertTriangle } from 'lucide-react';
 

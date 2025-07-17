@@ -1,4 +1,4 @@
-// components/AnswerChoices.tsx
+// components/game/AnswerChoices.tsx
 import React from 'react';
 import { CheckCircle, Clock, Target, AlertTriangle } from 'lucide-react';
 import { QuizChoice } from '@/types/game';

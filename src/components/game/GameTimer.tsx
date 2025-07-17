@@ -1,4 +1,4 @@
-// components/GameTimer.tsx
+// components/game/GameTimer.tsx
 import React from 'react';
 import { Clock } from 'lucide-react';
 

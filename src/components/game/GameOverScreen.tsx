@@ -1,4 +1,4 @@
-// components/GameOverScreen.tsx
+// components/game/GameOverScreen.tsx
 import React, { useState, useEffect } from 'react';
 import { 
   Trophy, 
@@ -10,7 +10,9 @@ import {
   Coins,
   Award,
   TrendingUp,
-  CheckCircle
+  CheckCircle,
+  Brain,
+  Sparkles
 } from 'lucide-react';
 import { GameStats } from '@/types/game';
 
@@ -18,12 +20,14 @@ interface GameOverScreenProps {
   stats: GameStats;
   onTryAgain: () => void;
   onBackToMenu: () => void;
+  isUsingAI?: boolean;
 }
 
 const GameOverScreen: React.FC<GameOverScreenProps> = ({
   stats,
   onTryAgain,
-  onBackToMenu
+  onBackToMenu,
+  isUsingAI = false
 }) => {
   const [showStats, setShowStats] = useState(false);
   const [showClaim, setShowClaim] = useState(false);
@@ -84,6 +88,16 @@ const GameOverScreen: React.FC<GameOverScreenProps> = ({
     }
   };
 
+  const getAIBonus = () => {
+    if (!isUsingAI) return 0;
+    // AI mode gives 20% bonus
+    return Math.floor(stats.finalScore * 0.2);
+  };
+
+  const getTotalScore = () => {
+    return stats.finalScore + getAIBonus();
+  };
+
   return (
     <div className="absolute inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-6 z-50">
       <div className="max-w-4xl w-full">
@@ -91,6 +105,17 @@ const GameOverScreen: React.FC<GameOverScreenProps> = ({
         <div className="bg-gradient-to-br from-purple-900/80 to-blue-900/80 rounded-3xl p-8 border border-purple-500/30 backdrop-blur-sm">
           {/* Header */}
           <div className="text-center mb-8">
+            {/* AI Mode Badge */}
+            {isUsingAI && (
+              <div className="mb-4">
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-full border border-purple-400/30">
+                  <Brain className="w-5 h-5 text-purple-300" />
+                  <span className="text-purple-300 font-bold">AI Generated Challenge</span>
+                  <Sparkles className="w-5 h-5 text-pink-300" />
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-center mb-4">
               <div className={`p-4 rounded-full ${getRankColor()} border-4 border-current`}>
                 {getRankIcon()}
@@ -110,7 +135,23 @@ const GameOverScreen: React.FC<GameOverScreenProps> = ({
               <div className="text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 mb-2">
                 {animatedScore.toLocaleString()}
               </div>
-              <div className="text-xl text-gray-300">Final Score</div>
+              
+              {/* AI Bonus Display */}
+              {isUsingAI && getAIBonus() > 0 && (
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center justify-center gap-2 text-purple-300">
+                    <Brain className="w-4 h-4" />
+                    <span className="text-lg">AI Mode Bonus: +{getAIBonus().toLocaleString()}</span>
+                  </div>
+                  <div className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+                    Total: {getTotalScore().toLocaleString()}
+                  </div>
+                </div>
+              )}
+              
+              <div className="text-xl text-gray-300 mt-2">
+                {isUsingAI ? 'Enhanced AI Score' : 'Final Score'}
+              </div>
             </div>
           </div>
 
@@ -164,7 +205,16 @@ const GameOverScreen: React.FC<GameOverScreenProps> = ({
                   Congratulations! 🎉
                 </h3>
                 <p className="text-gray-300 mb-4">
-                  You've earned <span className="text-yellow-400 font-bold">{stats.finalScore}</span> SUI tokens!
+                  You've earned{' '}
+                  <span className="text-yellow-400 font-bold">
+                    {isUsingAI ? getTotalScore().toLocaleString() : stats.finalScore.toLocaleString()}
+                  </span>{' '}
+                  SUI tokens!
+                  {isUsingAI && (
+                    <span className="block text-purple-300 text-sm mt-1">
+                      Including {getAIBonus().toLocaleString()} AI bonus tokens!
+                    </span>
+                  )}
                 </p>
                 <button
                   onClick={handleClaimReward}
@@ -207,7 +257,13 @@ const GameOverScreen: React.FC<GameOverScreenProps> = ({
                   Reward Claimed! ✅
                 </h3>
                 <p className="text-gray-300">
-                  {stats.finalScore} SUI tokens have been added to your wallet.
+                  {isUsingAI ? getTotalScore().toLocaleString() : stats.finalScore.toLocaleString()}{' '}
+                  SUI tokens have been added to your wallet.
+                  {isUsingAI && (
+                    <span className="block text-purple-300 text-sm mt-1">
+                      Thank you for testing our AI question generation system!
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
@@ -220,7 +276,7 @@ const GameOverScreen: React.FC<GameOverScreenProps> = ({
               className="flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-400 hover:to-purple-400 text-white font-bold rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-2xl text-lg"
             >
               <RefreshCw className="w-6 h-6" />
-              <span>Try Again</span>
+              <span>{isUsingAI ? 'Try Again with AI' : 'Try Again'}</span>
             </button>
             
             <button
@@ -234,10 +290,37 @@ const GameOverScreen: React.FC<GameOverScreenProps> = ({
 
           {/* Footer Message */}
           <div className="text-center mt-6 pt-6 border-t border-white/10">
-            <p className="text-gray-400">
-              Share your score and challenge your friends! 🚀
-            </p>
+            {isUsingAI ? (
+              <div className="space-y-2">
+                <p className="text-gray-400">
+                  🤖 Questions powered by Gemini AI • Experience may vary
+                </p>
+                <p className="text-purple-300 text-sm">
+                  Help us improve by sharing feedback! 🚀
+                </p>
+              </div>
+            ) : (
+              <p className="text-gray-400">
+                Share your score and challenge your friends! 🚀
+              </p>
+            )}
           </div>
+
+          {/* AI Mode Achievement */}
+          {isUsingAI && stats.accuracy >= 80 && (
+            <div className="mt-4 p-4 bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-lg border border-purple-500/30">
+              <div className="text-center">
+                <div className="flex items-center justify-center gap-2 text-purple-300 mb-2">
+                  <Award className="w-5 h-5" />
+                  <span className="font-bold">AI Challenge Master!</span>
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <p className="text-sm text-purple-200">
+                  You scored {stats.accuracy}% on AI-generated questions. Exceptional performance!
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-// components/GameInstructions.tsx
+// components/game/GameInstructions.tsx
 import React from 'react';
 import { Hand, Mouse, Clock, Target } from 'lucide-react';
 
@@ -48,12 +48,19 @@ const GameInstructions: React.FC<GameInstructionsProps> = ({
                 <div className="w-4 h-4 bg-yellow-400 rounded-full"></div>
                 <span>Tự động chọn khi hết giờ</span>
               </div>
+              <div className="flex items-center gap-2 col-span-2">
+                <div className="w-4 h-4 bg-red-400 rounded-full"></div>
+                <span>Game over nếu không phát hiện tay quá 3 giây</span>
+              </div>
             </div>
           )}
         </div>
         <div className="mt-3 pt-3 border-t border-white/20">
           <p className="text-xs text-white/60">
-            Trả lời đúng để kiếm điểm và nhận thưởng SUI! 🎉
+            {useSimpleMode ? 
+              'Trả lời đúng để kiếm điểm và nhận thưởng SUI! 🎉' :
+              'Camera đã được flip để dễ điều khiển. Giữ tay trong khung hình! 📹'
+            }
           </p>
         </div>
       </div>

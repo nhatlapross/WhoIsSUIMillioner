@@ -1,4 +1,4 @@
-// components/GameScreen.tsx
+// components/GameScreen2.tsx - Final version with complete multiplayer support
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Camera } from 'lucide-react';
 
@@ -18,7 +18,8 @@ import {
   HandLandmark, 
   GameState, 
   QUIZ_QUESTIONS, 
-  QUESTION_TIME_LIMIT 
+  QUESTION_TIME_LIMIT,
+  QuizQuestion 
 } from '../types/game';
 import { 
   createQuizChoices, 
@@ -31,18 +32,33 @@ interface GameScreenProps {
   handTrackingEnabled: boolean;
   cameraStream: MediaStream | undefined;
   onBackToPermission: () => void;
+  customQuestions?: QuizQuestion[] | null;
+  isUsingAI?: boolean;
+  // New props for multiplayer support
+  customGameState?: Partial<GameState>;
+  onAnswerSelect?: (choiceId: string) => void;
+  isMultiplayer?: boolean;
 }
 
 const GameScreen: React.FC<GameScreenProps> = ({ 
   handTrackingEnabled, 
   cameraStream, 
-  onBackToPermission 
+  onBackToPermission,
+  customQuestions = null,
+  isUsingAI = false,
+  customGameState = {},
+  onAnswerSelect,
+  isMultiplayer = false
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const handDetectionTimerRef = useRef<NodeJS.Timeout | null>(null);
   const handsInstanceRef = useRef<any>(null);
   const cameraInstanceRef = useRef<any>(null);
+  
+  // Use custom questions or default questions
+  const activeQuestions = customQuestions || QUIZ_QUESTIONS;
   
   // Screen and UI state
   const [screenSize, setScreenSize] = useState({ 
@@ -57,7 +73,12 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const [useSimpleMode, setUseSimpleMode] = useState(false);
   const [handPosition, setHandPosition] = useState<{ x: number; y: number } | null>(null);
   
-  // Game state
+  // Hand detection timeout state
+  const [handDetectionWarning, setHandDetectionWarning] = useState(false);
+  const [handDetectionCountdown, setHandDetectionCountdown] = useState(3);
+  const [lastHandDetectionTime, setLastHandDetectionTime] = useState(Date.now());
+  
+  // Game state - merge with custom state for multiplayer
   const [gameState, setGameState] = useState<GameState>({
     currentQuestion: 0,
     selectedChoice: null,
@@ -68,8 +89,19 @@ const GameScreen: React.FC<GameScreenProps> = ({
     isTimerActive: false,
     lastHoveredChoice: null,
     score: 0,
-    gamePhase: 'playing'
+    gamePhase: 'playing',
+    ...customGameState // Override with custom state for multiplayer
   });
+
+  // Update game state when customGameState changes (for multiplayer)
+  useEffect(() => {
+    if (isMultiplayer && customGameState) {
+      setGameState(prev => ({
+        ...prev,
+        ...customGameState
+      }));
+    }
+  }, [customGameState, isMultiplayer]);
 
   // Handle screen resize
   useEffect(() => {
@@ -81,8 +113,39 @@ const GameScreen: React.FC<GameScreenProps> = ({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Timer logic
+  // Hand detection timeout logic (only for solo mode)
   useEffect(() => {
+    if (!handTrackingEnabled || useSimpleMode || gameState.gamePhase !== 'playing' || isMultiplayer) {
+      return;
+    }
+
+    const checkHandDetection = () => {
+      const now = Date.now();
+      const timeSinceLastDetection = now - lastHandDetectionTime;
+      
+      if (timeSinceLastDetection > 3000) { // 3 seconds
+        // No hand detected for 3 seconds - game over
+        setGameState(prev => ({ ...prev, gamePhase: 'gameOver' }));
+        return;
+      }
+      
+      if (timeSinceLastDetection > 1000) { // Start warning after 1 second
+        setHandDetectionWarning(true);
+        const countdown = Math.ceil((3000 - timeSinceLastDetection) / 1000);
+        setHandDetectionCountdown(countdown);
+      } else {
+        setHandDetectionWarning(false);
+      }
+    };
+
+    const interval = setInterval(checkHandDetection, 100);
+    return () => clearInterval(interval);
+  }, [handTrackingEnabled, useSimpleMode, gameState.gamePhase, lastHandDetectionTime, isMultiplayer]);
+
+  // Timer logic (only for solo mode)
+  useEffect(() => {
+    if (isMultiplayer) return; // Multiplayer handles its own timing
+
     if (gameState.isTimerActive && gameState.timeLeft > 0 && !gameState.selectedChoice && !gameState.showResult) {
       timerRef.current = setTimeout(() => {
         setGameState(prev => ({ ...prev, timeLeft: prev.timeLeft - 1 }));
@@ -96,10 +159,12 @@ const GameScreen: React.FC<GameScreenProps> = ({
         clearTimeout(timerRef.current);
       }
     };
-  }, [gameState.isTimerActive, gameState.timeLeft, gameState.selectedChoice, gameState.showResult]);
+  }, [gameState.isTimerActive, gameState.timeLeft, gameState.selectedChoice, gameState.showResult, isMultiplayer]);
 
-  // Start timer when question changes
+  // Start timer when question changes (only for solo mode)
   useEffect(() => {
+    if (isMultiplayer) return;
+
     if (!gameState.showResult && gameState.selectedChoice === null && gameState.gamePhase === 'playing') {
       setGameState(prev => ({
         ...prev,
@@ -108,7 +173,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
         lastHoveredChoice: null
       }));
     }
-  }, [gameState.currentQuestion, gameState.showResult, gameState.selectedChoice, gameState.gamePhase]);
+  }, [gameState.currentQuestion, gameState.showResult, gameState.selectedChoice, gameState.gamePhase, isMultiplayer]);
 
   // Update last hovered choice
   useEffect(() => {
@@ -117,14 +182,18 @@ const GameScreen: React.FC<GameScreenProps> = ({
     }
   }, [gameState.hoveredChoice, gameState.selectedChoice]);
 
-  // Handle time up
+  // Handle time up (only for solo mode)
   const handleTimeUp = () => {
+    if (isMultiplayer) return;
+    
     const choiceToSelect = gameState.lastHoveredChoice || 'a';
     handleChoiceSelect(choiceToSelect, true);
   };
 
   // Reset timer
   const resetTimer = () => {
+    if (isMultiplayer) return;
+    
     setGameState(prev => ({
       ...prev,
       timeLeft: QUESTION_TIME_LIMIT,
@@ -159,8 +228,9 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
   // Get current quiz choices with dynamic positioning
   const getCurrentChoices = () => {
+    const currentQuestion = activeQuestions[gameState.currentQuestion];
     const baseChoices = ['Hà Nội', 'Hồ Chí Minh', 'Đà Nẵng', 'Cần Thơ'];
-    const questionChoices = QUIZ_QUESTIONS[gameState.currentQuestion]?.choices || baseChoices;
+    const questionChoices = currentQuestion?.choices || baseChoices;
     
     return createQuizChoices(screenSize.width, screenSize.height).map((choice, index) => ({
       ...choice,
@@ -243,6 +313,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
           
           if (isMounted) {
             setIsLoading(false);
+            setLastHandDetectionTime(Date.now()); // Reset detection timer when camera starts
           }
         } else {
           throw new Error('Video element not available');
@@ -270,10 +341,14 @@ const GameScreen: React.FC<GameScreenProps> = ({
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
       const landmarks = results.multiHandLandmarks[0];
       const indexTip = landmarks[8];
-      const screenX = indexTip.x * screenSize.width;
+      
+      // Flip the x coordinate for mirror effect
+      const screenX = (1 - indexTip.x) * screenSize.width;
       const screenY = indexTip.y * screenSize.height;
       
       setHandPosition({ x: screenX, y: screenY });
+      setLastHandDetectionTime(Date.now()); // Update last detection time
+      setHandDetectionWarning(false); // Clear warning when hand is detected
 
       // Check if hand is hovering over a choice
       let hovering = null;
@@ -288,6 +363,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
     } else {
       setHandPosition(null);
       setGameState(prev => ({ ...prev, hoveredChoice: null }));
+      // Don't update lastHandDetectionTime when no hand is detected
     }
   }, [screenSize, gameState.currentQuestion]);
 
@@ -295,7 +371,20 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const handleChoiceSelect = (choiceId: string, isAutoSelected: boolean = false) => {
     if (gameState.selectedChoice || gameState.showResult) return;
 
-    const correct = choiceId === QUIZ_QUESTIONS[gameState.currentQuestion].correctAnswer;
+    // For multiplayer, use the callback
+    if (isMultiplayer && onAnswerSelect) {
+      onAnswerSelect(choiceId);
+      // Also update local state to show selection
+      setGameState(prev => ({
+        ...prev,
+        selectedChoice: choiceId,
+        isTimerActive: false
+      }));
+      return;
+    }
+
+    // Solo mode logic
+    const correct = choiceId === activeQuestions[gameState.currentQuestion].correctAnswer;
     
     setGameState(prev => ({
       ...prev,
@@ -309,7 +398,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
     const resultDelay = isAutoSelected ? 3000 : 2500;
     
     setTimeout(() => {
-      if (gameState.currentQuestion < QUIZ_QUESTIONS.length - 1) {
+      if (gameState.currentQuestion < activeQuestions.length - 1) {
         setGameState(prev => ({
           ...prev,
           currentQuestion: prev.currentQuestion + 1,
@@ -340,6 +429,8 @@ const GameScreen: React.FC<GameScreenProps> = ({
       score: 0,
       gamePhase: 'playing'
     });
+    setLastHandDetectionTime(Date.now()); // Reset detection timer
+    setHandDetectionWarning(false);
     resetTimer();
   };
 
@@ -355,6 +446,9 @@ const GameScreen: React.FC<GameScreenProps> = ({
     return () => {
       if (timerRef.current) {
         clearTimeout(timerRef.current);
+      }
+      if (handDetectionTimerRef.current) {
+        clearTimeout(handDetectionTimerRef.current);
       }
     };
   }, []);
@@ -374,12 +468,12 @@ const GameScreen: React.FC<GameScreenProps> = ({
     );
   }
 
-  const currentQuiz = QUIZ_QUESTIONS[gameState.currentQuestion];
+  const currentQuiz = activeQuestions[gameState.currentQuestion];
   const currentChoices = getCurrentChoices();
 
-  // Game Over Screen
-  if (gameState.gamePhase === 'gameOver') {
-    const stats = calculateGameStats(gameState.score, QUIZ_QUESTIONS.length);
+  // Game Over Screen (only for solo mode)
+  if (gameState.gamePhase === 'gameOver' && !isMultiplayer) {
+    const stats = calculateGameStats(gameState.score, activeQuestions.length);
     return (
       <div 
         ref={containerRef}
@@ -387,7 +481,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
       >
         <video
           ref={videoRef}
-          className="absolute inset-0 w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-cover scale-x-[-1]"
           autoPlay
           playsInline
           muted
@@ -396,6 +490,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
           stats={stats}
           onTryAgain={resetGame}
           onBackToMenu={onBackToPermission}
+          isUsingAI={isUsingAI}
         />
       </div>
     );
@@ -407,10 +502,10 @@ const GameScreen: React.FC<GameScreenProps> = ({
       ref={containerRef}
       className="relative w-full h-screen bg-black overflow-hidden"
     >
-      {/* Video Background */}
+      {/* Video Background - Flipped horizontally */}
       <video
         ref={videoRef}
-        className="absolute inset-0 w-full h-full object-cover"
+        className="absolute inset-0 w-full h-full object-cover scale-x-[-1]"
         autoPlay
         playsInline
         muted
@@ -427,30 +522,61 @@ const GameScreen: React.FC<GameScreenProps> = ({
         onHandResults={onResults}
       />
 
+      {/* Hand Detection Warning (only for solo mode) */}
+      {handDetectionWarning && !useSimpleMode && gameState.gamePhase === 'playing' && !isMultiplayer && (
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-40">
+          <div className="bg-red-600/95 rounded-xl p-8 text-white text-center backdrop-blur-md border border-red-400/30 animate-pulse">
+            <div className="text-6xl mb-4">🚨</div>
+            <h3 className="text-3xl font-bold mb-4">Không phát hiện tay!</h3>
+            <div className="text-5xl font-bold mb-4 text-yellow-300">
+              {handDetectionCountdown}
+            </div>
+            <p className="text-xl text-red-100">
+              Hãy đưa tay vào khung hình hoặc game sẽ kết thúc!
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* AI Mode Indicator (only for solo mode) */}
+      {isUsingAI && !isMultiplayer && (
+        <div className="absolute top-6 left-1/2 transform -translate-x-1/2 z-10">
+          <div className="bg-gradient-to-r from-purple-500/90 to-pink-500/90 rounded-full px-4 py-2 text-white text-sm font-bold flex items-center gap-2 backdrop-blur-md border border-purple-400/30">
+            <span>🤖</span>
+            <span>AI Generated Questions</span>
+            <span>✨</span>
+          </div>
+        </div>
+      )}
+
       {/* Game UI */}
       <div className="absolute inset-0 pointer-events-none">
-        {/* Header */}
-        <GameHeader
-          score={gameState.score}
-          totalQuestions={QUIZ_QUESTIONS.length}
-          currentQuestion={gameState.currentQuestion}
-          onToggleFullScreen={toggleFullScreen}
-          onBackToMenu={onBackToPermission}
-        />
+        {/* Header - Hide in multiplayer mode */}
+        {!isMultiplayer && (
+          <GameHeader
+            score={gameState.score}
+            totalQuestions={activeQuestions.length}
+            currentQuestion={gameState.currentQuestion}
+            onToggleFullScreen={toggleFullScreen}
+            onBackToMenu={onBackToPermission}
+          />
+        )}
 
-        {/* Timer */}
-        <GameTimer
-          timeLeft={gameState.timeLeft}
-          totalTime={QUESTION_TIME_LIMIT}
-          isActive={gameState.isTimerActive}
-          lastHoveredChoice={gameState.lastHoveredChoice}
-        />
+        {/* Timer - Hide in multiplayer mode */}
+        {!isMultiplayer && (
+          <GameTimer
+            timeLeft={gameState.timeLeft}
+            totalTime={QUESTION_TIME_LIMIT}
+            isActive={gameState.isTimerActive}
+            lastHoveredChoice={gameState.lastHoveredChoice}
+          />
+        )}
 
         {/* Question */}
         <QuestionDisplay
           question={currentQuiz}
           currentQuestion={gameState.currentQuestion}
-          totalQuestions={QUIZ_QUESTIONS.length}
+          totalQuestions={activeQuestions.length}
         />
 
         {/* Answer Choices */}
@@ -464,21 +590,25 @@ const GameScreen: React.FC<GameScreenProps> = ({
           onChoiceSelect={handleChoiceSelect}
         />
 
-        {/* Notifications */}
-        <GameNotifications
-          showResult={gameState.showResult}
-          isCorrect={gameState.isCorrect}
-          timeLeft={gameState.timeLeft}
-          selectedChoice={gameState.selectedChoice}
-          lastHoveredChoice={gameState.lastHoveredChoice}
-          correctAnswer={currentQuiz.correctAnswer}
-        />
+        {/* Notifications (only for solo mode) */}
+        {!isMultiplayer && (
+          <GameNotifications
+            showResult={gameState.showResult}
+            isCorrect={gameState.isCorrect}
+            timeLeft={gameState.timeLeft}
+            selectedChoice={gameState.selectedChoice}
+            lastHoveredChoice={gameState.lastHoveredChoice}
+            correctAnswer={currentQuiz.correctAnswer}
+          />
+        )}
 
-        {/* Instructions */}
-        <GameInstructions
-          useSimpleMode={useSimpleMode}
-          timeLimit={QUESTION_TIME_LIMIT}
-        />
+        {/* Instructions - Hide in multiplayer mode */}
+        {!isMultiplayer && (
+          <GameInstructions
+            useSimpleMode={useSimpleMode}
+            timeLimit={QUESTION_TIME_LIMIT}
+          />
+        )}
       </div>
     </div>
   );
