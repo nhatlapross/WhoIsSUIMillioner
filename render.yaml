@@ -1,6 +1,14 @@
-# render.yaml - Render Blueprint
 services:
-  # Frontend Service (Next.js)
+  - type: web
+    name: sui-millionaire-websocket
+    runtime: node
+    buildCommand: npm install
+    startCommand: node server/websocket-server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+    healthCheckPath: /health
+
   - type: web
     name: sui-millionaire-frontend
     runtime: node
@@ -10,28 +18,8 @@ services:
       - key: NODE_ENV
         value: production
       - key: NEXT_PUBLIC_WS_URL
-        fromService:
-          type: web
-          name: sui-millionaire-websocket
-          property: url
-        # Sẽ tự động thay https bằng wss
-        transform: |
-          return value.replace('https://', 'wss://');
+        value: wss://whoissuimillioner.onrender.com
     healthCheckPath: /
-    
-  # WebSocket Service
-  - type: web
-    name: sui-millionaire-websocket
-    runtime: node
-    buildCommand: npm install
-    startCommand: node server/websocket-server.js
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: 10000  # Render mặc định
-    healthCheckPath: /health  # Cần thêm health endpoint
 
-databases: []  # Không cần database hiện tại
-
+databases: []
 envVarGroups: []
