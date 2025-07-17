@@ -14,7 +14,7 @@ const QuestionDisplay: React.FC<QuestionDisplayProps> = ({
   totalQuestions
 }) => {
   return (
-    <div className="absolute top-1/6 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-5xl px-6 z-10">
+    <div className="absolute top-1/5 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-5xl px-6 z-10">
       <div className="bg-black/80 backdrop-blur-md rounded-xl p-8 text-white text-center border border-white/20">
         <div className="flex items-center justify-center mb-6">
           <div className="flex items-center gap-4 w-full">

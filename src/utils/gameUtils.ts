@@ -9,7 +9,7 @@ export const createQuizChoices = (screenWidth: number, screenHeight: number): Qu
     text: 'Hà Nội', 
     position: { 
       x: screenWidth * 0.1, 
-      y: screenHeight * 0.3, 
+      y: screenHeight * 0.4, 
       width: screenWidth * 0.35, 
       height: screenHeight * 0.15 
     } 
@@ -20,7 +20,7 @@ export const createQuizChoices = (screenWidth: number, screenHeight: number): Qu
     text: 'Hồ Chí Minh', 
     position: { 
       x: screenWidth * 0.55, 
-      y: screenHeight * 0.3, 
+      y: screenHeight * 0.4, 
       width: screenWidth * 0.35, 
       height: screenHeight * 0.15 
     } 
@@ -31,7 +31,7 @@ export const createQuizChoices = (screenWidth: number, screenHeight: number): Qu
     text: 'Đà Nẵng', 
     position: { 
       x: screenWidth * 0.1, 
-      y: screenHeight * 0.55, 
+      y: screenHeight * 0.6, 
       width: screenWidth * 0.35, 
       height: screenHeight * 0.15 
     } 
@@ -42,7 +42,7 @@ export const createQuizChoices = (screenWidth: number, screenHeight: number): Qu
     text: 'Cần Thơ', 
     position: { 
       x: screenWidth * 0.55, 
-      y: screenHeight * 0.55, 
+      y: screenHeight * 0.6, 
       width: screenWidth * 0.35, 
       height: screenHeight * 0.15 
     } 
