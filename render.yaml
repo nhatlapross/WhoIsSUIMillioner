@@ -10,7 +10,7 @@ services:
     healthCheckPath: /health
 
   - type: web
-    name: sui-millionaire-frontend
+    name: whoissuimillioner
     runtime: node
     buildCommand: npm install && npm run build
     startCommand: npm start
