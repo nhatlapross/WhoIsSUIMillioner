@@ -6,7 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "websocket": "node server/websocket-server.js",
+    "dev:ws": "nodemon server/websocket-server.js",
+    "build:frontend": "npm install && npm run build",
+    "build:websocket": "npm install",
+    "start:frontend": "npm start",
+    "start:websocket": "node server/websocket-server.js"
   },
   "dependencies": {
     "clsx": "^2.1.1",

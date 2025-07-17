@@ -536,7 +536,23 @@ class GameRoom {
 }
 
 // Create WebSocket server
-const server = http.createServer();
+const server = http.createServer((req, res) => {
+  // Health check endpoint cho Render
+  if (req.url === '/health' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ 
+      status: 'healthy', 
+      timestamp: new Date().toISOString(),
+      activeRooms: gameRooms.size,
+      activeConnections: wss.clients.size
+    }));
+    return;
+  }
+
+  // Default response
+  res.writeHead(404, { 'Content-Type': 'text/plain' });
+  res.end('WebSocket Server - Use WSS connection');
+});
 const wss = new WebSocket.Server({ server });
 
 wss.on('connection', (ws, req) => {
@@ -801,8 +817,9 @@ setInterval(() => {
 
 // Start server
 const PORT = process.env.PORT || 8080;
-server.listen(PORT, () => {
-    logWithTimestamp(`🚀 WebSocket server ready on port ${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  logWithTimestamp(`🚀 WebSocket server ready on port ${PORT}`);
+  logWithTimestamp(`📡 Health check available at http://localhost:${PORT}/health`);
 });
 
 module.exports = { server, wss, gameRooms };

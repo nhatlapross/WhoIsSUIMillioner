@@ -1,9 +1,9 @@
 // hooks/useWebSocket.ts - ENHANCED debugging and state management
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { 
-  MessageType, 
-  WSMessage, 
+import {
+  MessageType,
+  WSMessage,
   RoomInfo,
   CreateRoomRequest,
   JoinRoomRequest,
@@ -58,10 +58,10 @@ export const useWebSocket = (): UseWebSocketReturn => {
   // ENHANCED DEBUG: Track ALL state changes with detailed logging
   const prevState = useRef<WebSocketState>(state);
   useEffect(() => {
-    const changedFields = Object.keys(state).filter(key => 
+    const changedFields = Object.keys(state).filter(key =>
       (state as any)[key] !== (prevState.current as any)[key]
     );
-    
+
     if (changedFields.length > 0) {
       console.log('🔄 WebSocket State Changed:', {
         changedFields,
@@ -80,12 +80,21 @@ export const useWebSocket = (): UseWebSocketReturn => {
         fullState: state
       });
     }
-    
+
     prevState.current = state;
   }, [state]);
 
+
   const getWebSocketUrl = (): string => {
     if (typeof window === 'undefined') return '';
+
+    // Production trên Render
+    if (process.env.NODE_ENV === 'production') {
+      // Render tự động set NEXT_PUBLIC_WS_URL từ render.yaml
+      return process.env.NEXT_PUBLIC_WS_URL || 'wss://sui-millionaire-websocket.onrender.com';
+    }
+
+    // Development local
     return 'ws://localhost:8080';
   };
 
@@ -97,7 +106,7 @@ export const useWebSocket = (): UseWebSocketReturn => {
     }
 
     const message: WSMessage = { type, data };
-    
+
     try {
       ws.current.send(JSON.stringify(message));
       console.log('📤 Sent message:', type, data);
@@ -120,14 +129,14 @@ export const useWebSocket = (): UseWebSocketReturn => {
             // CRITICAL: Only reset to lobby if explicitly leaving or no room
             const shouldResetToLobby = !prev.room || prev.gamePhase === 'lobby';
             const newGamePhase = shouldResetToLobby ? 'lobby' : prev.gamePhase;
-            
+
             console.log('🎮 ROOM_UPDATE phase decision:', {
               currentPhase: prev.gamePhase,
               hasRoom: !!prev.room,
               shouldResetToLobby,
               newGamePhase
             });
-            
+
             return {
               ...prev,
               room: message.data,
@@ -141,7 +150,7 @@ export const useWebSocket = (): UseWebSocketReturn => {
         case MessageType.GAME_STARTED:
           console.log('🎮 GAME_STARTED received:', message.data);
           const countdownValue = message.data.countdown || 0;
-          
+
           if (countdownValue > 0) {
             console.log('⏰ COUNTDOWN ACTIVE - Setting gamePhase to starting:', countdownValue);
             setState(prev => ({
@@ -193,7 +202,7 @@ export const useWebSocket = (): UseWebSocketReturn => {
           setState(prev => ({
             ...prev,
             gamePhase: 'finished',
-            currentQuestion: { 
+            currentQuestion: {
               ...prev.currentQuestion,
               ...message.data,
               winner: message.data.winner,
@@ -252,18 +261,18 @@ export const useWebSocket = (): UseWebSocketReturn => {
 
       ws.current.onclose = (event) => {
         console.log('🔌 WebSocket disconnected:', event.code, event.reason);
-        setState(prev => ({ 
-          ...prev, 
+        setState(prev => ({
+          ...prev,
           isConnected: false
         }));
-        
+
         // Auto-reconnect logic
         if (reconnectAttempts.current < maxReconnectAttempts) {
           reconnectAttempts.current++;
           reconnectDelay.current = Math.min(reconnectDelay.current * 2, 10000);
-          
+
           console.log(`🔄 Reconnecting in ${reconnectDelay.current}ms (attempt ${reconnectAttempts.current}/${maxReconnectAttempts})`);
-          
+
           setTimeout(() => {
             connect();
           }, reconnectDelay.current);
@@ -313,7 +322,7 @@ export const useWebSocket = (): UseWebSocketReturn => {
         setState(prev => {
           const newTimeLeft = prev.timeLeft - 1;
           console.log('⏰ Countdown tick:', newTimeLeft);
-          
+
           if (newTimeLeft <= 0) {
             console.log('⏱️ Starting countdown finished, should transition to playing');
             return {
@@ -323,7 +332,7 @@ export const useWebSocket = (): UseWebSocketReturn => {
               countdownValue: 0
             };
           }
-          
+
           return {
             ...prev,
             timeLeft: newTimeLeft,
@@ -331,7 +340,7 @@ export const useWebSocket = (): UseWebSocketReturn => {
           };
         });
       }, 1000);
-      
+
       return () => clearTimeout(timer);
     }
   }, [state.gamePhase, state.timeLeft]);
@@ -389,7 +398,7 @@ export const useWebSocket = (): UseWebSocketReturn => {
 
     console.log('✍️ Submitting answer:', answer);
     setState(prev => ({ ...prev, selectedAnswer: answer }));
-    
+
     const data: PlayerAnswerRequest = { answer };
     sendMessage(MessageType.PLAYER_ANSWER, data);
   }, [state.selectedAnswer, sendMessage]);
