@@ -1,4 +1,4 @@
-// components/multiplayer/MultiplayerLobby.tsx - Using WebSocket context
+// components/multiplayer/MultiplayerLobby.tsx - COMPLETE CLEANED VERSION
 'use client';
 import React, { useState } from 'react';
 import { Users, Trophy, Crown, Zap, Wifi, WifiOff, AlertCircle, Copy, Check, Clock } from 'lucide-react';
@@ -25,14 +25,6 @@ const MultiplayerLobby: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [isStartingGame, setIsStartingGame] = useState(false);
 
-  // DEBUG: Log component render
-  console.log('🏠 MultiplayerLobby rendered with state:', {
-    gamePhase,
-    hasRoom: !!room,
-    playerId,
-    isConnected
-  });
-
   const handleCreateRoom = () => {
     if (!playerName.trim()) {
       alert('Please enter your name');
@@ -58,8 +50,6 @@ const MultiplayerLobby: React.FC = () => {
   };
 
   const handleStartGame = () => {
-    console.log('🎮 Start game button clicked');
-    
     if (!room || playerId !== room.creator) {
       alert('Only room creator can start the game');
       return;
@@ -75,14 +65,11 @@ const MultiplayerLobby: React.FC = () => {
       return;
     }
 
-    console.log('🎮 Starting game from lobby - all validations passed');
     setIsStartingGame(true);
     
     try {
       startGame();
-      console.log('✅ Start game message sent successfully');
     } catch (error) {
-      console.error('❌ Failed to start game:', error);
       setIsStartingGame(false);
       alert('Failed to start game. Please try again.');
     }
@@ -96,23 +83,20 @@ const MultiplayerLobby: React.FC = () => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
-      console.error('Failed to copy room ID:', error);
+      // Silent error handling
     }
   };
 
-  // Lobby Screen (No Room)
   if (!room) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-6">
         <div className="max-w-2xl mx-auto">
-          {/* Header */}
           <div className="text-center mb-8">
             <h1 className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 mb-4">
               SUI MILLIONAIRE
             </h1>
             <h2 className="text-2xl font-bold text-blue-400 mb-4">Multiplayer Battle Royale</h2>
             
-            {/* Connection Status */}
             <div className="flex items-center justify-center gap-2 text-white/80 mb-4">
               {isConnected ? (
                 <>
@@ -127,7 +111,6 @@ const MultiplayerLobby: React.FC = () => {
               )}
             </div>
 
-            {/* Error Display */}
             {error && (
               <div className="bg-red-500/20 border border-red-500/50 rounded-xl p-4 mb-4">
                 <div className="flex items-center gap-2 text-red-300 mb-2">
@@ -145,10 +128,8 @@ const MultiplayerLobby: React.FC = () => {
             )}
           </div>
 
-          {/* Main Form */}
           <div className="bg-white/10 backdrop-blur-md rounded-3xl p-8 border border-white/20">
             <div className="space-y-6">
-              {/* Player Name */}
               <div>
                 <label className="block text-white font-medium mb-2">Your Name</label>
                 <input
@@ -164,7 +145,6 @@ const MultiplayerLobby: React.FC = () => {
 
               {!showJoinForm ? (
                 <>
-                  {/* Entry Fee */}
                   <div>
                     <label className="block text-white font-medium mb-2">Entry Fee (SUI)</label>
                     <select
@@ -181,7 +161,6 @@ const MultiplayerLobby: React.FC = () => {
                     </select>
                   </div>
 
-                  {/* Create Room Button */}
                   <button
                     onClick={handleCreateRoom}
                     disabled={!isConnected || !playerName.trim()}
@@ -206,7 +185,6 @@ const MultiplayerLobby: React.FC = () => {
                 </>
               ) : (
                 <>
-                  {/* Room ID Input */}
                   <div>
                     <label className="block text-white font-medium mb-2">Room ID</label>
                     <input
@@ -238,7 +216,6 @@ const MultiplayerLobby: React.FC = () => {
                 </>
               )}
 
-              {/* Info Box */}
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
                 <h4 className="text-blue-300 font-bold mb-2">🎮 How Multiplayer Works</h4>
                 <ul className="text-blue-200 text-sm space-y-1">
@@ -261,7 +238,6 @@ const MultiplayerLobby: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-6">
       <div className="max-w-6xl mx-auto">
         
-        {/* Room Header */}
         <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 mb-6 border border-white/20">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
@@ -303,7 +279,6 @@ const MultiplayerLobby: React.FC = () => {
             </div>
             
             <div className="flex gap-3">
-              {/* Start Game Button */}
               {playerId === room.creator && room.state === 'waiting' && (
                 <button
                   onClick={handleStartGame}
@@ -329,7 +304,6 @@ const MultiplayerLobby: React.FC = () => {
                 </button>
               )}
               
-              {/* Show status if game is starting */}
               {room.state === 'starting' && (
                 <div className="flex items-center gap-2 px-4 py-3 bg-yellow-500/20 border border-yellow-500/30 rounded-xl text-yellow-300">
                   <Clock className="w-5 h-5" />
@@ -348,7 +322,6 @@ const MultiplayerLobby: React.FC = () => {
           </div>
         </div>
 
-        {/* Players List */}
         <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
           <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
             <Users className="w-6 h-6" />
@@ -406,7 +379,6 @@ const MultiplayerLobby: React.FC = () => {
             ))}
           </div>
           
-          {/* Validation messages */}
           {room.playerCount < 2 && room.state === 'waiting' && (
             <div className="mt-4 p-3 bg-yellow-500/20 border border-yellow-500/30 rounded-lg">
               <p className="text-yellow-300 text-sm text-center">

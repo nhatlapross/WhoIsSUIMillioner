@@ -1,6 +1,6 @@
-// hooks/useWebSocket.ts - ENHANCED debugging and state management
+// hooks/useWebSocket.ts - CLEANED VERSION without debug logs
 'use client';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   MessageType,
   WSMessage,
@@ -52,122 +52,118 @@ export const useWebSocket = (): UseWebSocketReturn => {
 
   const ws = useRef<WebSocket | null>(null);
   const reconnectAttempts = useRef(0);
-  const maxReconnectAttempts = 5;
+  const maxReconnectAttempts = useRef(5);
   const reconnectDelay = useRef(1000);
-
-  // ENHANCED DEBUG: Track ALL state changes with detailed logging
-  const prevState = useRef<WebSocketState>(state);
-  useEffect(() => {
-    const changedFields = Object.keys(state).filter(key =>
-      (state as any)[key] !== (prevState.current as any)[key]
-    );
-
-    if (changedFields.length > 0) {
-      console.log('🔄 WebSocket State Changed:', {
-        changedFields,
-        before: {
-          gamePhase: prevState.current.gamePhase,
-          roomState: prevState.current.room?.state,
-          timeLeft: prevState.current.timeLeft,
-          countdownValue: prevState.current.countdownValue
-        },
-        after: {
-          gamePhase: state.gamePhase,
-          roomState: state.room?.state,
-          timeLeft: state.timeLeft,
-          countdownValue: state.countdownValue
-        },
-        fullState: state
-      });
-    }
-
-    prevState.current = state;
-  }, [state]);
-
+  
+  // Answer tracking refs
+  const lastSentAnswer = useRef<string | null>(null);
+  const pendingAnswer = useRef<string | null>(null);
+  const answerUpdateTimer = useRef<NodeJS.Timeout | null>(null);
+  
+  // Timer refs
+  const countdownTimer = useRef<NodeJS.Timeout | null>(null);
+  const playingTimer = useRef<NodeJS.Timeout | null>(null);
+  
+  const updateState = useCallback((updater: (prev: WebSocketState) => WebSocketState) => {
+    setState(updater);
+  }, []);
 
   const getWebSocketUrl = (): string => {
     if (typeof window === 'undefined') return '';
 
-    // Production trên Render
     if (process.env.NODE_ENV === 'production') {
-      // Render tự động set NEXT_PUBLIC_WS_URL từ render.yaml
       return process.env.NEXT_PUBLIC_WS_URL || 'wss://whoissuimillioner.onrender.com';
     }
 
-    // Development local
     return 'ws://localhost:8080';
   };
 
-  const sendMessage = useCallback((type: MessageType, data?: any) => {
+  const sendMessage = useCallback((type: MessageType, data?: any): boolean => {
     if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
-      console.error('❌ WebSocket not connected, cannot send:', type);
-      setState(prev => ({ ...prev, error: 'Not connected to server' }));
-      return;
+      return false;
     }
 
-    const message: WSMessage = { type, data };
-
     try {
+      const message: WSMessage = { type, data };
       ws.current.send(JSON.stringify(message));
-      console.log('📤 Sent message:', type, data);
+      return true;
     } catch (error) {
-      console.error('❌ Failed to send message:', error);
-      setState(prev => ({ ...prev, error: 'Failed to send message' }));
+      return false;
     }
   }, []);
 
-  // ENHANCED: Handle incoming WebSocket messages with detailed logging
+  // Answer submission with continuous tracking
+  const trackAnswer = useCallback((answer: string) => {
+    pendingAnswer.current = answer;
+    
+    updateState(prev => ({ 
+      ...prev, 
+      selectedAnswer: answer 
+    }));
+
+    if (lastSentAnswer.current !== answer && state.gamePhase === 'playing') {
+      if (answerUpdateTimer.current) {
+        clearTimeout(answerUpdateTimer.current);
+      }
+      
+      const success = sendMessage(MessageType.PLAYER_ANSWER, { answer });
+      
+      if (success) {
+        lastSentAnswer.current = answer;
+      } else {
+        answerUpdateTimer.current = setTimeout(() => {
+          if (pendingAnswer.current === answer && lastSentAnswer.current !== answer) {
+            const retrySuccess = sendMessage(MessageType.PLAYER_ANSWER, { answer });
+            if (retrySuccess) {
+              lastSentAnswer.current = answer;
+            }
+          }
+        }, 500);
+      }
+    }
+  }, [sendMessage, state.gamePhase, updateState]);
+
   const handleMessage = useCallback((event: MessageEvent) => {
     try {
       const message: WSMessage = JSON.parse(event.data);
-      console.log('📨 Received message:', message.type, message.data);
 
       switch (message.type) {
         case MessageType.ROOM_UPDATE:
-          console.log('🏠 ROOM_UPDATE received:', message.data);
-          setState(prev => {
-            // CRITICAL: Only reset to lobby if explicitly leaving or no room
+          updateState(prev => {
             const shouldResetToLobby = !prev.room || prev.gamePhase === 'lobby';
-            const newGamePhase = shouldResetToLobby ? 'lobby' : prev.gamePhase;
-
-            console.log('🎮 ROOM_UPDATE phase decision:', {
-              currentPhase: prev.gamePhase,
-              hasRoom: !!prev.room,
-              shouldResetToLobby,
-              newGamePhase
-            });
-
             return {
               ...prev,
               room: message.data,
               playerId: message.data.playerId || prev.playerId,
-              gamePhase: newGamePhase,
+              gamePhase: shouldResetToLobby ? 'lobby' : prev.gamePhase,
               error: null
             };
           });
           break;
 
         case MessageType.GAME_STARTED:
-          console.log('🎮 GAME_STARTED received:', message.data);
           const countdownValue = message.data.countdown || 0;
 
+          lastSentAnswer.current = null;
+          pendingAnswer.current = null;
+
           if (countdownValue > 0) {
-            console.log('⏰ COUNTDOWN ACTIVE - Setting gamePhase to starting:', countdownValue);
-            setState(prev => ({
+            updateState(prev => ({
               ...prev,
               gamePhase: 'starting',
               timeLeft: countdownValue,
               countdownValue: countdownValue,
+              selectedAnswer: null,
               gameStartData: message.data,
               error: null
             }));
           } else {
-            console.log('🚀 COUNTDOWN FINISHED - Setting gamePhase to playing');
-            setState(prev => ({
+            updateState(prev => ({
               ...prev,
               gamePhase: 'playing',
               timeLeft: 0,
               countdownValue: 0,
+              selectedAnswer: null,
               gameStartData: message.data,
               error: null
             }));
@@ -175,10 +171,12 @@ export const useWebSocket = (): UseWebSocketReturn => {
           break;
 
         case MessageType.NEXT_QUESTION:
-          console.log('❓ NEXT_QUESTION received - ensuring playing state:', message.data);
-          setState(prev => ({
+          lastSentAnswer.current = null;
+          pendingAnswer.current = null;
+          
+          updateState(prev => ({
             ...prev,
-            gamePhase: 'playing', // FORCE playing state
+            gamePhase: 'playing',
             currentQuestion: message.data,
             timeLeft: message.data.timeLimit || 15,
             selectedAnswer: null,
@@ -188,18 +186,22 @@ export const useWebSocket = (): UseWebSocketReturn => {
           }));
           break;
 
+        case MessageType.PLAYER_ANSWER:
+          // Server confirmed answer received
+          break;
+
         case MessageType.PLAYER_ELIMINATED:
-          console.log('❌ PLAYER_ELIMINATED received:', message.data);
-          setState(prev => ({
+          updateState(prev => ({
             ...prev,
             eliminationData: message.data
-            // DON'T change gamePhase
           }));
           break;
 
         case MessageType.GAME_OVER:
-          console.log('🏁 GAME_OVER received:', message.data);
-          setState(prev => ({
+          lastSentAnswer.current = null;
+          pendingAnswer.current = null;
+          
+          updateState(prev => ({
             ...prev,
             gamePhase: 'finished',
             currentQuestion: {
@@ -210,49 +212,37 @@ export const useWebSocket = (): UseWebSocketReturn => {
               prizePool: message.data.prizePool
             },
             timeLeft: 0,
+            selectedAnswer: null,
             countdownValue: 0,
             error: null
           }));
           break;
 
         case MessageType.ERROR:
-          console.error('❌ Server error:', message.data);
-          setState(prev => ({ ...prev, error: message.data.message }));
+          updateState(prev => ({ ...prev, error: message.data.message }));
           break;
 
         case MessageType.PONG:
           // Heartbeat response
           break;
-
-        default:
-          console.log('❓ Unknown message type:', message.type);
       }
     } catch (error) {
-      console.error('❌ Error parsing message:', error);
-      setState(prev => ({ ...prev, error: 'Invalid message received' }));
+      updateState(prev => ({ ...prev, error: 'Invalid message received' }));
     }
-  }, []);
+  }, [updateState]);
 
   const connect = useCallback(() => {
     if (ws.current?.readyState === WebSocket.OPEN) {
-      console.log('✅ WebSocket already connected');
       return;
     }
 
     const wsUrl = getWebSocketUrl();
-    if (!wsUrl) {
-      console.error('❌ No WebSocket URL available');
-      return;
-    }
-
-    console.log('🔌 Connecting to WebSocket:', wsUrl);
 
     try {
       ws.current = new WebSocket(wsUrl);
 
       ws.current.onopen = () => {
-        console.log('✅ WebSocket connected successfully');
-        setState(prev => ({ ...prev, isConnected: true, error: null }));
+        updateState(prev => ({ ...prev, isConnected: true, error: null }));
         reconnectAttempts.current = 0;
         reconnectDelay.current = 1000;
       };
@@ -260,50 +250,37 @@ export const useWebSocket = (): UseWebSocketReturn => {
       ws.current.onmessage = handleMessage;
 
       ws.current.onclose = (event) => {
-        console.log('🔌 WebSocket disconnected:', event.code, event.reason);
-        setState(prev => ({
-          ...prev,
-          isConnected: false
-        }));
+        updateState(prev => ({ ...prev, isConnected: false }));
 
-        // Auto-reconnect logic
-        if (reconnectAttempts.current < maxReconnectAttempts) {
+        if (reconnectAttempts.current < maxReconnectAttempts.current) {
           reconnectAttempts.current++;
           reconnectDelay.current = Math.min(reconnectDelay.current * 2, 10000);
 
-          console.log(`🔄 Reconnecting in ${reconnectDelay.current}ms (attempt ${reconnectAttempts.current}/${maxReconnectAttempts})`);
-
-          setTimeout(() => {
-            connect();
-          }, reconnectDelay.current);
+          setTimeout(connect, reconnectDelay.current);
         } else {
-          setState(prev => ({ ...prev, error: 'Connection lost. Please refresh the page.' }));
+          updateState(prev => ({ ...prev, error: 'Connection lost' }));
         }
       };
 
       ws.current.onerror = (error) => {
-        console.log('❌ WebSocket error:', error);
-        setState(prev => ({ ...prev, error: 'Connection error' }));
+        updateState(prev => ({ ...prev, error: 'Connection error' }));
       };
     } catch (error) {
-      console.log('❌ Failed to create WebSocket:', error);
-      setState(prev => ({ ...prev, error: 'Failed to connect' }));
+      updateState(prev => ({ ...prev, error: 'Failed to connect' }));
     }
-  }, [handleMessage]);
+  }, [handleMessage, updateState]);
 
   // Initialize connection
   useEffect(() => {
     connect();
-
     return () => {
       if (ws.current) {
-        console.log('🧹 Closing WebSocket connection');
         ws.current.close();
       }
     };
   }, [connect]);
 
-  // Heartbeat ping
+  // Heartbeat
   useEffect(() => {
     if (!state.isConnected) return;
 
@@ -314,17 +291,21 @@ export const useWebSocket = (): UseWebSocketReturn => {
     return () => clearInterval(pingInterval);
   }, [state.isConnected, sendMessage]);
 
-  // ENHANCED: Timer countdown for starting phase with detailed logging
+  // Timer for starting phase
   useEffect(() => {
-    if (state.gamePhase === 'starting' && state.timeLeft > 0) {
-      console.log('⏰ Starting countdown timer, current timeLeft:', state.timeLeft);
-      const timer = setTimeout(() => {
-        setState(prev => {
-          const newTimeLeft = prev.timeLeft - 1;
-          console.log('⏰ Countdown tick:', newTimeLeft);
+    if (countdownTimer.current) {
+      clearTimeout(countdownTimer.current);
+      countdownTimer.current = null;
+    }
 
+    if (state.gamePhase === 'starting' && state.timeLeft > 0) {
+      countdownTimer.current = setTimeout(() => {
+        updateState(prev => {
+          if (prev.gamePhase !== 'starting') return prev;
+          
+          const newTimeLeft = prev.timeLeft - 1;
+          
           if (newTimeLeft <= 0) {
-            console.log('⏱️ Starting countdown finished, should transition to playing');
             return {
               ...prev,
               timeLeft: 0,
@@ -340,88 +321,138 @@ export const useWebSocket = (): UseWebSocketReturn => {
           };
         });
       }, 1000);
-
-      return () => clearTimeout(timer);
     }
-  }, [state.gamePhase, state.timeLeft]);
 
-  // Timer countdown for playing phase
+    return () => {
+      if (countdownTimer.current) {
+        clearTimeout(countdownTimer.current);
+        countdownTimer.current = null;
+      }
+    };
+  }, [state.gamePhase, state.timeLeft, updateState]);
+
+  // Timer for playing phase with answer tracking
   useEffect(() => {
-    if (state.gamePhase === 'playing' && state.timeLeft > 0 && !state.selectedAnswer) {
-      const timer = setTimeout(() => {
-        setState(prev => ({ ...prev, timeLeft: prev.timeLeft - 1 }));
-      }, 1000);
-      return () => clearTimeout(timer);
+    if (playingTimer.current) {
+      clearTimeout(playingTimer.current);
+      playingTimer.current = null;
     }
-  }, [state.gamePhase, state.timeLeft, state.selectedAnswer]);
+
+    if (state.gamePhase === 'playing' && state.timeLeft > 0) {
+      playingTimer.current = setTimeout(() => {
+        updateState(prev => {
+          if (prev.gamePhase !== 'playing' || prev.timeLeft <= 0) return prev;
+          
+          const newTimeLeft = prev.timeLeft - 1;
+          
+          // Check if we have an unsent answer
+          if (pendingAnswer.current && lastSentAnswer.current !== pendingAnswer.current) {
+            const success = sendMessage(MessageType.PLAYER_ANSWER, { answer: pendingAnswer.current });
+            if (success) {
+              lastSentAnswer.current = pendingAnswer.current;
+            }
+          }
+          
+          return {
+            ...prev,
+            timeLeft: newTimeLeft
+          };
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (playingTimer.current) {
+        clearTimeout(playingTimer.current);
+        playingTimer.current = null;
+      }
+    };
+  }, [state.gamePhase, state.timeLeft, sendMessage, updateState]);
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (countdownTimer.current) {
+        clearTimeout(countdownTimer.current);
+      }
+      if (playingTimer.current) {
+        clearTimeout(playingTimer.current);
+      }
+      if (answerUpdateTimer.current) {
+        clearTimeout(answerUpdateTimer.current);
+      }
+    };
+  }, []);
 
   // API methods
-  const createRoom = useCallback((data: CreateRoomRequest) => {
-    console.log('🏠 Creating room:', data);
-    sendMessage(MessageType.CREATE_ROOM, data);
-  }, [sendMessage]);
+  const apiMethods = useMemo(() => ({
+    createRoom: (data: CreateRoomRequest) => {
+      sendMessage(MessageType.CREATE_ROOM, data);
+    },
 
-  const joinRoom = useCallback((data: JoinRoomRequest) => {
-    console.log('🚪 Joining room:', data);
-    sendMessage(MessageType.JOIN_ROOM, data);
-  }, [sendMessage]);
+    joinRoom: (data: JoinRoomRequest) => {
+      sendMessage(MessageType.JOIN_ROOM, data);
+    },
 
-  const leaveRoom = useCallback(() => {
-    console.log('👋 Leaving room - explicit reset to lobby');
-    sendMessage(MessageType.LEAVE_ROOM);
-    setState(prev => ({
-      ...prev,
-      room: null,
-      playerId: null,
-      currentQuestion: null,
-      gamePhase: 'lobby', // EXPLICIT reset to lobby only when leaving
-      selectedAnswer: null,
-      eliminationData: null,
-      gameStartData: null,
-      timeLeft: 0,
-      countdownValue: 0,
-      error: null
-    }));
-  }, [sendMessage]);
+    leaveRoom: () => {
+      lastSentAnswer.current = null;
+      pendingAnswer.current = null;
+      
+      if (countdownTimer.current) {
+        clearTimeout(countdownTimer.current);
+        countdownTimer.current = null;
+      }
+      if (playingTimer.current) {
+        clearTimeout(playingTimer.current);
+        playingTimer.current = null;
+      }
+      if (answerUpdateTimer.current) {
+        clearTimeout(answerUpdateTimer.current);
+        answerUpdateTimer.current = null;
+      }
+      
+      sendMessage(MessageType.LEAVE_ROOM);
+      updateState(prev => ({
+        ...prev,
+        room: null,
+        playerId: null,
+        currentQuestion: null,
+        gamePhase: 'lobby',
+        selectedAnswer: null,
+        eliminationData: null,
+        gameStartData: null,
+        timeLeft: 0,
+        countdownValue: 0,
+        error: null
+      }));
+    },
 
-  const startGame = useCallback((questions?: any[]) => {
-    console.log('🎮 Starting game with questions:', questions?.length || 'default');
-    const data: StartGameRequest = questions ? { questions } : {};
-    sendMessage(MessageType.START_GAME, data);
-  }, [sendMessage]);
+    startGame: (questions?: any[]) => {
+      const data: StartGameRequest = questions ? { questions } : {};
+      sendMessage(MessageType.START_GAME, data);
+    },
 
-  const submitAnswer = useCallback((answer: string) => {
-    if (state.selectedAnswer) {
-      console.log('⚠️ Answer already submitted:', state.selectedAnswer);
-      return;
+    submitAnswer: (answer: string) => {
+      if (state.selectedAnswer || state.gamePhase !== 'playing') {
+        return;
+      }
+
+      trackAnswer(answer);
+    },
+
+    reconnect: () => {
+      reconnectAttempts.current = 0;
+      updateState(prev => ({ ...prev, error: null }));
+      connect();
+    },
+
+    clearError: () => {
+      updateState(prev => ({ ...prev, error: null }));
     }
-
-    console.log('✍️ Submitting answer:', answer);
-    setState(prev => ({ ...prev, selectedAnswer: answer }));
-
-    const data: PlayerAnswerRequest = { answer };
-    sendMessage(MessageType.PLAYER_ANSWER, data);
-  }, [state.selectedAnswer, sendMessage]);
-
-  const reconnect = useCallback(() => {
-    console.log('🔄 Manual reconnect requested');
-    reconnectAttempts.current = 0;
-    setState(prev => ({ ...prev, error: null }));
-    connect();
-  }, [connect]);
-
-  const clearError = useCallback(() => {
-    setState(prev => ({ ...prev, error: null }));
-  }, []);
+  }), [sendMessage, connect, updateState, trackAnswer, state.selectedAnswer, state.gamePhase]);
 
   return {
     ...state,
-    createRoom,
-    joinRoom,
-    leaveRoom,
-    startGame,
-    submitAnswer,
-    reconnect,
-    clearError
+    ...apiMethods
   };
 };

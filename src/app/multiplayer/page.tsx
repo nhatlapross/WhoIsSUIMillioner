@@ -67,8 +67,8 @@ const MultiplayerPage: React.FC = () => {
             </div>
           </div>
         </div>
-        <DebugPanel />
-        <WebSocketStateLogger />
+        {/* <DebugPanel /> */}
+        {/* <WebSocketStateLogger /> */}
       </>
     );
   }
@@ -85,8 +85,8 @@ const MultiplayerPage: React.FC = () => {
             <p className="text-white/70 text-sm mt-2">ws://localhost:8080</p>
           </div>
         </div>
-        <DebugPanel />
-        <WebSocketStateLogger />
+        {/* <DebugPanel /> */}
+        {/* <WebSocketStateLogger /> */}
       </>
     );
   }
@@ -106,13 +106,13 @@ const MultiplayerPage: React.FC = () => {
     return (
       <>
         <div className="relative">
-          <div className="fixed top-2 left-2 bg-red-800/90 text-white p-2 text-xs z-50 rounded">
+          {/* <div className="fixed top-2 left-2 bg-red-800/90 text-white p-2 text-xs z-50 rounded">
             STARTING - Render #{renderCount} - Phase: {gamePhase}
-          </div>
+          </div> */}
           <MultiplayerGame />
         </div>
-        <DebugPanel />
-        <WebSocketStateLogger />
+        {/* <DebugPanel /> */}
+        {/* <WebSocketStateLogger /> */}
       </>
     );
   }
@@ -122,13 +122,13 @@ const MultiplayerPage: React.FC = () => {
     return (
       <>
         <div className="relative">
-          <div className="fixed top-2 left-2 bg-green-800/90 text-white p-2 text-xs z-50 rounded">
+          {/* <div className="fixed top-2 left-2 bg-green-800/90 text-white p-2 text-xs z-50 rounded">
             PLAYING - Render #{renderCount} - Phase: {gamePhase}
-          </div>
+          </div> */}
           <MultiplayerGame />
         </div>
-        <DebugPanel />
-        <WebSocketStateLogger />
+        {/* <DebugPanel /> */}
+        {/* <WebSocketStateLogger /> */}
       </>
     );
   }
@@ -138,13 +138,13 @@ const MultiplayerPage: React.FC = () => {
     return (
       <>
         <div className="relative">
-          <div className="fixed top-2 left-2 bg-purple-800/90 text-white p-2 text-xs z-50 rounded">
+          {/* <div className="fixed top-2 left-2 bg-purple-800/90 text-white p-2 text-xs z-50 rounded">
             FINISHED - Render #{renderCount} - Phase: {gamePhase}
-          </div>
+          </div> */}
           <MultiplayerGame />
         </div>
-        <DebugPanel />
-        <WebSocketStateLogger />
+        {/* <DebugPanel /> */}
+        {/* <WebSocketStateLogger /> */}
       </>
     );
   }
@@ -154,13 +154,13 @@ const MultiplayerPage: React.FC = () => {
   return (
     <>
       <div className="relative">
-        <div className="fixed top-2 left-2 bg-blue-800/90 text-white p-2 text-xs z-50 rounded">
+        {/* <div className="fixed top-2 left-2 bg-blue-800/90 text-white p-2 text-xs z-50 rounded">
           LOBBY - Render #{renderCount} - Phase: {gamePhase}
-        </div>
+        </div> */}
         <MultiplayerLobby />
       </div>
-      <DebugPanel />
-      <WebSocketStateLogger />
+      {/* <DebugPanel /> */}
+      {/* <WebSocketStateLogger /> */}
     </>
   );
 };

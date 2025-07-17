@@ -1,6 +1,6 @@
-// contexts/WebSocketContext.tsx - SINGLE INSTANCE context provider
+// contexts/WebSocketContext.tsx - CLEANED VERSION without debug logs
 'use client';
-import React, { createContext, useContext, ReactNode } from 'react';
+import React, { createContext, useContext, ReactNode, useMemo } from 'react';
 import { useWebSocket as useWebSocketHook } from '@/hooks/useWebSocket';
 import { 
   MessageType, 
@@ -39,17 +39,36 @@ interface WebSocketProviderProps {
 }
 
 export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
-  const websocketState = useWebSocketHook();
+  const websocketHookData = useWebSocketHook();
   
-  console.log('🔌 WebSocketProvider render with state:', {
-    gamePhase: websocketState.gamePhase,
-    hasRoom: !!websocketState.room,
-    playerId: websocketState.playerId,
-    isConnected: websocketState.isConnected
-  });
+  // Memoize the context value to prevent unnecessary re-renders
+  const contextValue = useMemo(() => {
+    return websocketHookData;
+  }, [
+    // Only re-create context when these specific values change
+    websocketHookData.isConnected,
+    websocketHookData.room?.id,
+    websocketHookData.room?.state,
+    websocketHookData.room?.playerCount,
+    websocketHookData.playerId,
+    websocketHookData.currentQuestion?.questionNumber,
+    websocketHookData.gamePhase,
+    websocketHookData.timeLeft,
+    websocketHookData.selectedAnswer,
+    websocketHookData.error,
+    websocketHookData.countdownValue,
+    // Stable function references
+    websocketHookData.createRoom,
+    websocketHookData.joinRoom,
+    websocketHookData.leaveRoom,
+    websocketHookData.startGame,
+    websocketHookData.submitAnswer,
+    websocketHookData.reconnect,
+    websocketHookData.clearError
+  ]);
 
   return (
-    <WebSocketContext.Provider value={websocketState}>
+    <WebSocketContext.Provider value={contextValue}>
       {children}
     </WebSocketContext.Provider>
   );

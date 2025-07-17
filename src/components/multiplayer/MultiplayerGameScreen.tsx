@@ -1,12 +1,13 @@
-// components/multiplayer/MultiplayerGameScreen.tsx - DEBUG loading issue
+// components/multiplayer/MultiplayerGameScreen.tsx - COMPLETE CLEANED VERSION
 'use client';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useCameraPermission } from '@/hooks/useCameraPermission';
 import GameScreen from '@/components/GameScreen2';
 import MultiplayerOverlay from '@/components/multiplayer/MultiplayerOverlay';
+import AnswerTracker from '@/components/multiplayer/AnswerTracker';
 import { QuizQuestion } from '@/types/game';
-import { Camera, Users, Trophy, Coins, CheckCircle } from 'lucide-react';
+import { Camera, Users, Trophy, AlertCircle } from 'lucide-react';
 
 interface MultiplayerGameScreenProps {
   onBackToLobby: () => void;
@@ -26,31 +27,14 @@ const MultiplayerGameScreen: React.FC<MultiplayerGameScreenProps> = ({ onBackToL
   } = useWebSocket();
 
   const { status, stream, requestPermission } = useCameraPermission();
-  const [gameQuestions, setGameQuestions] = useState<QuizQuestion[]>([]);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [isClaimingReward, setIsClaimingReward] = useState(false);
-  const [hasClaimedReward, setHasClaimedReward] = useState(false);
+  
+  const gameQuestionsRef = useRef<QuizQuestion[]>([]);
+  const currentQuestionIndexRef = useRef(0);
+  const [renderKey, setRenderKey] = useState(0);
+  const [hoveredChoice, setHoveredChoice] = useState<string | null>(null);
+  const [localSelectedAnswer, setLocalSelectedAnswer] = useState<string | null>(null);
 
-  // CRITICAL DEBUG: Log all state and conditions
-  console.log('🎮 MultiplayerGameScreen RENDER - Debug State:', {
-    gamePhase,
-    hasRoom: !!room,
-    roomState: room?.state,
-    playerId,
-    hasCurrentQuestion: !!currentQuestion,
-    questionNumber: currentQuestion?.questionNumber,
-    isConnected,
-    cameraStatus: status,
-    hasStream: !!stream,
-    gameQuestionsLength: gameQuestions.length,
-    currentQuestionIndex,
-    timeLeft,
-    selectedAnswer
-  });
-
-  // Convert multiplayer question to GameScreen format
   const convertMultiplayerQuestion = useCallback((mpQuestion: any): QuizQuestion => {
-    console.log('🔄 Converting multiplayer question:', mpQuestion);
     return {
       question: mpQuestion.question,
       choices: mpQuestion.choices,
@@ -58,102 +42,100 @@ const MultiplayerGameScreen: React.FC<MultiplayerGameScreenProps> = ({ onBackToL
     };
   }, []);
 
-  // Update game questions when currentQuestion changes
-  useEffect(() => {
-    if (currentQuestion && gamePhase === 'playing') {
-      console.log('📝 Processing new question:', currentQuestion);
-      const convertedQuestion = convertMultiplayerQuestion(currentQuestion);
-      
-      // Update or add the current question to our questions array
-      setGameQuestions(prev => {
-        const newQuestions = [...prev];
-        const questionIndex = currentQuestion.questionNumber - 1;
-        
-        // Ensure array is long enough
-        while (newQuestions.length <= questionIndex) {
-          newQuestions.push({
-            question: 'Loading...',
-            choices: ['Loading...', 'Loading...', 'Loading...', 'Loading...'],
-            correctAnswer: 'a'
-          });
-        }
-        
-        newQuestions[questionIndex] = convertedQuestion;
-        console.log('📝 Updated game questions array:', newQuestions);
-        return newQuestions;
-      });
-      
-      setCurrentQuestionIndex(currentQuestion.questionNumber - 1);
+  const handleAnswerSelect = useCallback((choiceId: string) => {
+    if (selectedAnswer || localSelectedAnswer || gamePhase !== 'playing') {
+      return;
     }
-  }, [currentQuestion, gamePhase, convertMultiplayerQuestion]);
 
-  // Create custom game state for GameScreen
-  const createGameScreenState = useCallback(() => {
-    if (!room || !currentQuestion) {
-      console.log('❌ Cannot create game state - missing room or question');
-      return undefined;
-    }
+    setLocalSelectedAnswer(choiceId);
+    submitAnswer(choiceId);
+  }, [selectedAnswer, localSelectedAnswer, gamePhase, submitAnswer]);
+
+  const handleHoverChange = useCallback((choiceId: string | null) => {
+    setHoveredChoice(choiceId);
+  }, []);
+
+  const handleAnswerTrackerUpdate = useCallback((answer: string) => {
+    setLocalSelectedAnswer(answer);
+  }, []);
+
+  const handleBackToLobby = useCallback(() => {
+    leaveRoom();
+    onBackToLobby();
+  }, [leaveRoom, onBackToLobby]);
+
+  const gameScreenState = useMemo(() => {
+    if (!room || !currentQuestion) return undefined;
 
     const player = room.players.find(p => p.id === playerId);
     const isEliminated = player?.eliminated || false;
+    const effectiveSelectedAnswer = selectedAnswer || localSelectedAnswer;
     
-    const gameState = {
-      currentQuestion: currentQuestionIndex,
-      selectedChoice: selectedAnswer,
-      hoveredChoice: null,
+    return {
+      currentQuestion: currentQuestionIndexRef.current,
+      selectedChoice: effectiveSelectedAnswer,
+      hoveredChoice: hoveredChoice,
       showResult: false,
       isCorrect: null,
       timeLeft: timeLeft,
-      isTimerActive: timeLeft > 0 && !selectedAnswer && !isEliminated,
-      lastHoveredChoice: null,
-      score: 0, // Will be calculated differently for multiplayer
+      isTimerActive: false,
+      lastHoveredChoice: hoveredChoice,
+      score: 0,
       gamePhase: isEliminated ? ('gameOver' as const) : ('playing' as const)
     };
+  }, [room?.id, currentQuestion?.questionNumber, playerId, selectedAnswer, localSelectedAnswer, hoveredChoice, timeLeft, renderKey]);
 
-    console.log('🎮 Created game screen state:', gameState);
-    return gameState;
-  }, [room, currentQuestion, playerId, selectedAnswer, timeLeft, currentQuestionIndex]);
+  const gameScreenProps = useMemo(() => ({
+    handTrackingEnabled: true,
+    cameraStream: stream,
+    onBackToPermission: handleBackToLobby,
+    customQuestions: gameQuestionsRef.current,
+    isUsingAI: false,
+    customGameState: gameScreenState,
+    onAnswerSelect: handleAnswerSelect,
+    onHoverChange: handleHoverChange,
+    isMultiplayer: true
+  }), [stream, handleBackToLobby, gameScreenState, handleAnswerSelect, handleHoverChange]);
 
-  // Handle answer selection from GameScreen
-  const handleAnswerSelect = useCallback((choiceId: string) => {
-    if (!selectedAnswer && gamePhase === 'playing') {
-      console.log('✍️ Answer selected:', choiceId);
-      submitAnswer(choiceId);
+  // Reset answer tracking when question changes
+  useEffect(() => {
+    setHoveredChoice(null);
+    setLocalSelectedAnswer(null);
+  }, [currentQuestion?.questionNumber]);
+
+  // Sync with server selected answer
+  useEffect(() => {
+    if (selectedAnswer && selectedAnswer !== localSelectedAnswer) {
+      setLocalSelectedAnswer(selectedAnswer);
     }
-  }, [selectedAnswer, gamePhase, submitAnswer]);
+  }, [selectedAnswer, localSelectedAnswer]);
 
-  // Handle back to lobby
-  const handleBackToLobby = () => {
-    leaveRoom();
-    onBackToLobby();
-  };
+  useEffect(() => {
+    if (currentQuestion && gamePhase === 'playing') {
+      const convertedQuestion = convertMultiplayerQuestion(currentQuestion);
+      const questionIndex = currentQuestion.questionNumber - 1;
+      
+      while (gameQuestionsRef.current.length <= questionIndex) {
+        gameQuestionsRef.current.push({
+          question: 'Loading...',
+          choices: ['Loading...', 'Loading...', 'Loading...', 'Loading...'],
+          correctAnswer: 'a'
+        });
+      }
+      
+      gameQuestionsRef.current[questionIndex] = convertedQuestion;
+      currentQuestionIndexRef.current = questionIndex;
+      setRenderKey(prev => prev + 1);
+    }
+  }, [currentQuestion?.questionNumber, gamePhase, convertMultiplayerQuestion]);
 
-  // Request camera permission when component mounts
   useEffect(() => {
     if (status === 'idle') {
-      console.log('📷 Requesting camera permission...');
       requestPermission();
     }
   }, [status, requestPermission]);
 
-  // DEBUG: Show detailed loading states
-  console.log('🔍 Render decision factors:', {
-    isConnected,
-    cameraStatus: status,
-    hasStream: !!stream,
-    gamePhase,
-    hasRoom: !!room,
-    hasCurrentQuestion: !!currentQuestion,
-    gameQuestionsLength: gameQuestions.length,
-    currentQuestionIndexValid: currentQuestionIndex < gameQuestions.length,
-    shouldShowCameraScreen: status !== 'granted' || !stream,
-    shouldShowFinishedScreen: gamePhase === 'finished',
-    shouldShowLoadingScreen: gameQuestions.length === 0 || currentQuestionIndex >= gameQuestions.length
-  });
-
-  // Show connection error
   if (!isConnected) {
-    console.log('🚫 Showing connection error screen');
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center">
         <div className="text-center text-white">
@@ -171,9 +153,7 @@ const MultiplayerGameScreen: React.FC<MultiplayerGameScreenProps> = ({ onBackToL
     );
   }
 
-  // Show game finished screen
   if (gamePhase === 'finished') {
-    console.log('🏁 Showing finished screen');
     const winner = currentQuestion?.winner;
     const isWinner = winner && winner.id === playerId;
     
@@ -181,8 +161,6 @@ const MultiplayerGameScreen: React.FC<MultiplayerGameScreenProps> = ({ onBackToL
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-6">
         <div className="max-w-2xl w-full">
           <div className="bg-white/10 backdrop-blur-md rounded-3xl p-8 border border-white/20 text-center">
-            
-            {/* Winner Announcement */}
             {winner ? (
               <div className="space-y-6">
                 <div className="text-6xl mb-4">🏆</div>
@@ -226,21 +204,11 @@ const MultiplayerGameScreen: React.FC<MultiplayerGameScreenProps> = ({ onBackToL
     );
   }
 
-  // Show camera permission screen
   if (status !== 'granted' || !stream) {
-    console.log('📷 Showing camera permission screen, status:', status);
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-6">
         <div className="max-w-md w-full">
           <div className="bg-white/10 backdrop-blur-md rounded-3xl p-8 border border-white/20 text-center">
-            
-            {/* DEBUG INFO */}
-            <div className="absolute top-4 left-4 bg-blue-800/80 rounded p-2 text-xs text-white">
-              <div>Camera Status: {status}</div>
-              <div>Has Stream: {stream ? 'Yes' : 'No'}</div>
-              <div>Component: Camera Permission</div>
-            </div>
-
             <Camera className="w-16 h-16 text-blue-400 mx-auto mb-6" />
             
             <h2 className="text-2xl font-bold text-white mb-4">Camera Access Required</h2>
@@ -291,24 +259,10 @@ const MultiplayerGameScreen: React.FC<MultiplayerGameScreenProps> = ({ onBackToL
     );
   }
 
-  // Show loading while waiting for game data
-  if (gameQuestions.length === 0 || currentQuestionIndex >= gameQuestions.length) {
-    console.log('⏳ Showing loading screen - waiting for game data');
+  if (gameQuestionsRef.current.length === 0 || currentQuestionIndexRef.current >= gameQuestionsRef.current.length || !gameScreenState) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center">
         <div className="text-center text-white">
-          
-          {/* DEBUG INFO */}
-          <div className="absolute top-4 left-4 bg-yellow-800/80 rounded p-2 text-xs text-white max-w-xs">
-            <div>Component: Loading Game Data</div>
-            <div>Questions Length: {gameQuestions.length}</div>
-            <div>Current Index: {currentQuestionIndex}</div>
-            <div>Has Question: {currentQuestion ? 'Yes' : 'No'}</div>
-            <div>Question Number: {currentQuestion?.questionNumber}</div>
-            <div>Game Phase: {gamePhase}</div>
-            <div>Room State: {room?.state}</div>
-          </div>
-
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
           <p className="text-xl">Loading multiplayer game...</p>
           <div className="mt-4 text-sm text-white/70">
@@ -316,8 +270,6 @@ const MultiplayerGameScreen: React.FC<MultiplayerGameScreenProps> = ({ onBackToL
             <p>Players: {room?.playerCount}</p>
             <p>Prize Pool: {room?.prizePool?.toFixed(2)} SUI</p>
             <p>Game Phase: {gamePhase}</p>
-            <p>Questions Loaded: {gameQuestions.length}</p>
-            <p>Current Question: {currentQuestion?.questionNumber || 'None'}</p>
           </div>
           
           <button
@@ -331,59 +283,27 @@ const MultiplayerGameScreen: React.FC<MultiplayerGameScreenProps> = ({ onBackToL
     );
   }
 
-  // Create custom GameScreen with multiplayer integration
-  console.log('🎮 Rendering GameScreen with multiplayer integration');
-  const CustomGameScreen = () => {
-    const gameState = createGameScreenState();
-    
-    // Don't render if no game state
-    if (!gameState) {
-      console.log('❌ No game state available');
-      return (
-        <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center">
-          <div className="text-center text-white">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-            <p className="text-xl">Preparing game...</p>
-          </div>
-        </div>
-      );
-    }
-    
-    return (
-      <div className="relative">
-        
-        {/* DEBUG INFO */}
-        <div className="absolute top-4 left-4 bg-green-800/80 rounded p-2 text-xs text-white z-50">
-          <div>Component: GameScreen Active</div>
-          <div>Question: {gameState.currentQuestion + 1}</div>
-          <div>Time Left: {gameState.timeLeft}s</div>
-          <div>Selected: {gameState.selectedChoice || 'None'}</div>
-        </div>
-
-        <GameScreen
-          handTrackingEnabled={true}
-          cameraStream={stream}
-          onBackToPermission={handleBackToLobby}
-          customQuestions={gameQuestions}
-          isUsingAI={false}
-          customGameState={gameState}
-          onAnswerSelect={handleAnswerSelect}
-          isMultiplayer={true}
-        />
-        
-        {/* Multiplayer Overlay */}
-        <MultiplayerOverlay
-          room={room}
-          playerId={playerId!}
-          timeLeft={timeLeft}
-          selectedAnswer={selectedAnswer}
-          currentQuestion={currentQuestion}
-        />
-      </div>
-    );
-  };
-
-  return <CustomGameScreen />;
+  return (
+    <div className="relative" key={renderKey}>
+      <GameScreen {...gameScreenProps} />
+      
+      <AnswerTracker
+        hoveredChoice={hoveredChoice}
+        selectedAnswer={selectedAnswer || localSelectedAnswer}
+        gamePhase={gamePhase}
+        timeLeft={timeLeft}
+        onAnswerUpdate={handleAnswerTrackerUpdate}
+      />
+      
+      <MultiplayerOverlay
+        room={room}
+        playerId={playerId!}
+        timeLeft={timeLeft}
+        selectedAnswer={selectedAnswer || localSelectedAnswer}
+        currentQuestion={currentQuestion}
+      />
+    </div>
+  );
 };
 
 export default MultiplayerGameScreen;

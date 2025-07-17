@@ -1,5 +1,5 @@
-// components/game/AnswerChoices.tsx
-import React from 'react';
+// components/game/AnswerChoices.tsx - FIXED for multiplayer answer submission
+import React, { useCallback } from 'react';
 import { CheckCircle, Clock, Target, AlertTriangle } from 'lucide-react';
 import { QuizChoice } from '@/types/game';
 
@@ -11,6 +11,7 @@ interface AnswerChoicesProps {
   isCorrect: boolean | null;
   timeLeft: number;
   onChoiceSelect: (choiceId: string) => void;
+  isMultiplayer?: boolean; // Add multiplayer prop
 }
 
 const AnswerChoices: React.FC<AnswerChoicesProps> = ({
@@ -20,17 +21,44 @@ const AnswerChoices: React.FC<AnswerChoicesProps> = ({
   lastHoveredChoice,
   isCorrect,
   timeLeft,
-  onChoiceSelect
+  onChoiceSelect,
+  isMultiplayer = false
 }) => {
+  // ENHANCED: Stable choice selection handler
+  const handleChoiceClick = useCallback((choiceId: string, event?: React.MouseEvent) => {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    console.log('🖱️ Choice clicked:', {
+      choiceId,
+      selectedChoice,
+      isMultiplayer,
+      timeLeft,
+      timestamp: new Date().toISOString()
+    });
+
+    // Prevent double selection
+    if (selectedChoice) {
+      console.log('⚠️ Answer already selected:', selectedChoice);
+      return;
+    }
+
+    console.log('✅ Calling onChoiceSelect with:', choiceId);
+    onChoiceSelect(choiceId);
+  }, [selectedChoice, onChoiceSelect, isMultiplayer, timeLeft]);
+
   return (
     <>
       {choices.map((choice) => (
         <div
           key={choice.id}
           className={`
-            absolute transition-all duration-300 pointer-events-auto cursor-pointer z-10
+            absolute transition-all duration-300 z-10
             ${hoveredChoice === choice.id ? 'scale-105 z-20' : 'scale-100'}
             ${lastHoveredChoice === choice.id && timeLeft <= 5 ? 'animate-pulse' : ''}
+            ${selectedChoice ? 'pointer-events-none' : 'pointer-events-auto cursor-pointer'}
           `}
           style={{
             left: `${choice.position.x}px`,
@@ -38,7 +66,12 @@ const AnswerChoices: React.FC<AnswerChoicesProps> = ({
             width: `${choice.position.width}px`,
             height: `${choice.position.height}px`,
           }}
-          onClick={() => onChoiceSelect(choice.id)}
+          onClick={(e) => handleChoiceClick(choice.id, e)}
+          onMouseDown={(e) => e.preventDefault()} // Prevent any interference
+          onTouchStart={(e) => {
+            e.preventDefault();
+            handleChoiceClick(choice.id);
+          }}
         >
           <div className={`
             w-full h-full rounded-xl border-4 flex items-center gap-6 px-6 transition-all duration-300
@@ -55,7 +88,7 @@ const AnswerChoices: React.FC<AnswerChoicesProps> = ({
             }
             ${lastHoveredChoice === choice.id && timeLeft <= 5 ? 
               'border-yellow-400 bg-yellow-500/20 shadow-lg shadow-yellow-500/20' : ''}
-            hover:shadow-2xl hover:border-blue-400
+            ${selectedChoice ? '' : 'hover:shadow-2xl hover:border-blue-400'}
           `}>
             <div className={`
               w-16 h-16 rounded-full flex items-center justify-center font-bold text-2xl text-white
@@ -74,12 +107,14 @@ const AnswerChoices: React.FC<AnswerChoicesProps> = ({
             </span>
             
             <div className="flex items-center gap-2">
+              {/* Hover indicator */}
               {hoveredChoice === choice.id && !selectedChoice && (
                 <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center animate-bounce">
                   <Target className="w-6 h-6 text-white" />
                 </div>
               )}
               
+              {/* Selected indicator */}
               {selectedChoice === choice.id && (
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                   isCorrect ? 'bg-green-500' : 'bg-red-500'
@@ -88,13 +123,28 @@ const AnswerChoices: React.FC<AnswerChoicesProps> = ({
                 </div>
               )}
               
+              {/* Auto-select warning for last hovered */}
               {lastHoveredChoice === choice.id && timeLeft <= 5 && timeLeft > 0 && !selectedChoice && (
                 <div className="w-10 h-10 bg-yellow-500 rounded-full flex items-center justify-center animate-pulse">
                   <Clock className="w-6 h-6 text-white" />
                 </div>
               )}
+
+              {/* Multiplayer mode indicator */}
+              {isMultiplayer && selectedChoice === choice.id && (
+                <div className="text-xs bg-blue-500/80 text-white px-2 py-1 rounded-full">
+                  SENT
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Click area overlay for better touch/click detection */}
+          <div 
+            className="absolute inset-0 cursor-pointer"
+            onClick={(e) => handleChoiceClick(choice.id, e)}
+            style={{ zIndex: 1 }}
+          />
         </div>
       ))}
     </>

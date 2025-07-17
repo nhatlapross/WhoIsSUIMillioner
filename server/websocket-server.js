@@ -1,4 +1,4 @@
-// server/websocket-server.js - FIXED: Proper broadcasting to all players
+// server/websocket-server.js - ENHANCED answer processing with detailed debugging
 const WebSocket = require('ws');
 const http = require('http');
 const { v4: uuidv4 } = require('uuid');
@@ -29,7 +29,7 @@ const GameState = {
 
 // Global storage
 const gameRooms = new Map();
-const playerConnections = new Map();
+const playerConnections = new Map(); // playerId -> websocket connection
 
 function logWithTimestamp(message, data) {
     const timestamp = new Date().toISOString();
@@ -66,6 +66,21 @@ function broadcastToRoom(roomId, message, excludePlayerId = null) {
     logWithTimestamp(`📡 Broadcast ${message.type} to room ${roomId}: ${sentCount} sent, ${failedCount} failed`);
 }
 
+// ENHANCED: Connection tracking
+function addPlayerConnection(playerId, ws) {
+    playerConnections.set(playerId, ws);
+    logWithTimestamp(`🔗 Added player connection mapping: ${playerId}`);
+}
+
+function removePlayerConnection(playerId) {
+    playerConnections.delete(playerId);
+    logWithTimestamp(`🔗 Removed player connection mapping: ${playerId}`);
+}
+
+function getPlayerConnection(playerId) {
+    return playerConnections.get(playerId);
+}
+
 function getDefaultMultiplayerQuestions() {
     return [
         {
@@ -96,7 +111,7 @@ function getDefaultMultiplayerQuestions() {
     ];
 }
 
-// GameRoom class with FIXED broadcasting
+// GameRoom class with ENHANCED answer processing
 class GameRoom {
     constructor(id, creator, entryFee = 0.5) {
         this.id = id;
@@ -135,9 +150,11 @@ class GameRoom {
         this.players.push(player);
         this.prizePool += this.entryFee;
 
+        // ENHANCED: Add connection mapping
+        addPlayerConnection(player.id, player.connection);
+
         logWithTimestamp(`✅ Player ${player.id} joined room ${this.id}. Players: ${this.players.length}, Prize pool: ${this.prizePool} SUI`);
 
-        // Only send room update if game is still waiting
         if (this.state === GameState.WAITING) {
             this.broadcastToRoom({
                 type: MessageType.ROOM_UPDATE,
@@ -156,6 +173,9 @@ class GameRoom {
             return;
         }
 
+        // ENHANCED: Remove connection mapping
+        removePlayerConnection(playerId);
+
         this.players.splice(playerIndex, 1);
         this.prizePool = Math.max(0, this.prizePool - this.entryFee);
 
@@ -171,7 +191,6 @@ class GameRoom {
             }
         }
 
-        // Only send room update if still in waiting state
         if (this.state === GameState.WAITING) {
             this.broadcastToRoom({
                 type: MessageType.ROOM_UPDATE,
@@ -191,7 +210,6 @@ class GameRoom {
             return { success: false, error: 'Need at least 2 players' };
         }
 
-        // CRITICAL: Set state and questions immediately
         this.questions = questions && questions.length > 0 ? questions : getDefaultMultiplayerQuestions();
         this.state = GameState.STARTING;
         this.startTime = Date.now();
@@ -201,12 +219,11 @@ class GameRoom {
 
         let countdown = 3;
 
-        // CRITICAL FIX: Send initial countdown to ALL players
         const initialCountdownData = {
             countdown: countdown,
             totalQuestions: this.questions.length,
             prizePool: this.prizePool,
-            roomState: this.state // Include room state
+            roomState: this.state
         };
 
         logWithTimestamp(`📡 Broadcasting initial countdown to all ${this.players.length} players`);
@@ -215,13 +232,11 @@ class GameRoom {
             data: initialCountdownData
         });
 
-        // Start countdown interval
         this.countdownTimer = setInterval(() => {
             countdown--;
             logWithTimestamp(`⏰ Countdown: ${countdown}`);
 
             if (countdown > 0) {
-                // Continue countdown
                 const countdownData = {
                     countdown: countdown,
                     totalQuestions: this.questions.length,
@@ -229,13 +244,11 @@ class GameRoom {
                     roomState: this.state
                 };
 
-                logWithTimestamp(`📡 Broadcasting countdown ${countdown} to all players`);
                 this.broadcastToRoom({
                     type: MessageType.GAME_STARTED,
                     data: countdownData
                 });
             } else {
-                // Countdown finished
                 logWithTimestamp(`🚀 Countdown finished! Transitioning to PLAYING state`);
                 
                 if (this.countdownTimer) {
@@ -247,7 +260,6 @@ class GameRoom {
                     this.state = GameState.PLAYING;
                     logWithTimestamp(`▶️ Game state changed to PLAYING in room ${this.id}`);
 
-                    // Send final countdown message (countdown = 0)
                     const finalCountdownData = {
                         countdown: 0,
                         totalQuestions: this.questions.length,
@@ -255,13 +267,11 @@ class GameRoom {
                         roomState: this.state
                     };
 
-                    logWithTimestamp(`📡 Broadcasting final countdown (GO!) to all players`);
                     this.broadcastToRoom({
                         type: MessageType.GAME_STARTED,
                         data: finalCountdownData
                     });
 
-                    // Start first question after a short delay
                     setTimeout(() => {
                         if (this.state === GameState.PLAYING && gameRooms.has(this.id)) {
                             logWithTimestamp(`❓ Starting first question`);
@@ -295,11 +305,12 @@ class GameRoom {
             this.questionTimer = null;
         }
 
-        // Reset player answers
+        // ENHANCED: Reset player answers with detailed logging
         this.players.forEach(player => {
             if (!player.eliminated) {
                 player.currentAnswer = undefined;
                 player.answerTime = undefined;
+                logWithTimestamp(`🔄 Reset answer for player ${player.name} (${player.id})`);
             }
         });
 
@@ -330,27 +341,64 @@ class GameRoom {
         }, 15000);
     }
 
+    // ENHANCED: submitAnswer with detailed debugging
     submitAnswer(playerId, answer) {
+        logWithTimestamp(`🔍 SUBMIT ANSWER DEBUG:`, {
+            playerId,
+            answer,
+            roomId: this.id,
+            roomState: this.state,
+            currentQuestion: this.currentQuestion + 1,
+            timestamp: new Date().toISOString()
+        });
+
         const player = this.players.find(p => p.id === playerId);
-        if (!player || player.eliminated) {
-            logWithTimestamp(`❌ Invalid answer submission from player ${playerId}`);
-            return;
+        if (!player) {
+            logWithTimestamp(`❌ Player not found: ${playerId}`);
+            return { success: false, error: 'Player not found' };
+        }
+
+        if (player.eliminated) {
+            logWithTimestamp(`❌ Player ${player.name} is already eliminated`);
+            return { success: false, error: 'Player eliminated' };
         }
 
         if (this.state !== GameState.PLAYING) {
             logWithTimestamp(`❌ Answer submitted but game not playing (state: ${this.state})`);
-            return;
-        }
+            return { success: false, error: `Game not in playing state: ${this.state}` };
+            }
 
         if (player.currentAnswer !== undefined) {
-            logWithTimestamp(`⚠️ Player ${playerId} already answered: ${player.currentAnswer}`);
-            return;
+            logWithTimestamp(`⚠️ Player ${player.name} already answered: ${player.currentAnswer}`);
+            return { success: false, error: 'Answer already submitted' };
         }
 
+        // ENHANCED: Record answer with validation
         player.currentAnswer = answer.toLowerCase();
         player.answerTime = Date.now() - (this.questionStartTime || Date.now());
 
-        logWithTimestamp(`✍️ Player ${player.name} answered "${answer}" in ${player.answerTime}ms`);
+        logWithTimestamp(`✅ Answer recorded for ${player.name}:`, {
+            answer: answer.toLowerCase(),
+            answerTime: player.answerTime,
+            playerId
+        });
+
+        // Send confirmation back to player
+        try {
+            if (player.connection && player.connection.readyState === WebSocket.OPEN) {
+                player.connection.send(JSON.stringify({
+                    type: MessageType.PLAYER_ANSWER,
+                    data: {
+                        success: true,
+                        answer: answer,
+                        questionNumber: this.currentQuestion + 1
+                    }
+                }));
+                logWithTimestamp(`📤 Sent answer confirmation to ${player.name}`);
+            }
+        } catch (error) {
+            logWithTimestamp(`❌ Failed to send confirmation to ${player.name}:`, error.message);
+        }
 
         // Check if all alive players answered
         const alivePlayers = this.getAlivePlayers();
@@ -370,6 +418,8 @@ class GameRoom {
                 }
             }, 500);
         }
+
+        return { success: true };
     }
 
     processAnswers() {
@@ -386,6 +436,8 @@ class GameRoom {
             if (player.eliminated) return;
 
             const playerAnswer = player.currentAnswer ? player.currentAnswer.toLowerCase() : null;
+
+            logWithTimestamp(`🔍 Player ${player.name}: answered "${playerAnswer}", correct is "${correctAnswer}"`);
 
             if (playerAnswer !== correctAnswer) {
                 player.eliminated = true;
@@ -529,7 +581,7 @@ class GameRoom {
 
         this.players.forEach(player => {
             if (player.connection) {
-                playerConnections.delete(player.id);
+                removePlayerConnection(player.id);
             }
         });
     }
@@ -537,22 +589,22 @@ class GameRoom {
 
 // Create WebSocket server
 const server = http.createServer((req, res) => {
-  // Health check endpoint cho Render
   if (req.url === '/health' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ 
       status: 'healthy', 
       timestamp: new Date().toISOString(),
       activeRooms: gameRooms.size,
-      activeConnections: wss.clients.size
+      activeConnections: wss ? wss.clients.size : 0,
+      playerConnections: playerConnections.size
     }));
     return;
   }
 
-  // Default response
   res.writeHead(404, { 'Content-Type': 'text/plain' });
   res.end('WebSocket Server - Use WSS connection');
 });
+
 const wss = new WebSocket.Server({ server });
 
 wss.on('connection', (ws, req) => {
@@ -569,10 +621,16 @@ wss.on('connection', (ws, req) => {
         ws.isAlive = true;
     });
 
+    // ENHANCED: Message handling with better debugging
     ws.on('message', (message) => {
         try {
             const data = JSON.parse(message.toString());
-            logWithTimestamp(`📨 Message from ${connectionId}: ${data.type}`);
+            logWithTimestamp(`📨 Message from ${connectionId}:`, {
+                type: data.type,
+                playerId: playerId,
+                roomId: currentRoomId,
+                hasData: !!data.data
+            });
 
             switch (data.type) {
                 case MessageType.CREATE_ROOM:
@@ -593,18 +651,27 @@ wss.on('connection', (ws, req) => {
                 case MessageType.PING:
                     ws.send(JSON.stringify({ type: MessageType.PONG }));
                     break;
+                default:
+                    logWithTimestamp(`❓ Unknown message type: ${data.type}`);
             }
         } catch (error) {
-            logWithTimestamp(`❌ Error processing message:`, error.message);
+            logWithTimestamp(`❌ Error processing message from ${connectionId}:`, error.message);
+            ws.send(JSON.stringify({
+                type: MessageType.ERROR,
+                data: { message: 'Invalid message format' }
+            }));
         }
     });
 
     ws.on('close', () => {
         logWithTimestamp(`🔌 Connection ${connectionId} closed`);
+        if (playerId) {
+            removePlayerConnection(playerId);
+        }
         handleLeaveRoom();
     });
 
-    // Message handlers
+    // ENHANCED: Message handlers with better error handling
     function handleCreateRoom(data) {
         if (!data.playerName || data.playerName.trim().length < 2) {
             ws.send(JSON.stringify({
@@ -636,7 +703,6 @@ wss.on('connection', (ws, req) => {
         }
 
         gameRooms.set(roomId, room);
-        playerConnections.set(playerId, ws);
         currentRoomId = roomId;
 
         ws.send(JSON.stringify({
@@ -687,7 +753,6 @@ wss.on('connection', (ws, req) => {
             return;
         }
 
-        playerConnections.set(playerId, ws);
         currentRoomId = data.roomId.toUpperCase();
 
         ws.send(JSON.stringify({
@@ -711,6 +776,7 @@ wss.on('connection', (ws, req) => {
             room.removePlayer(playerId);
         }
         currentRoomId = null;
+        playerId = null;
     }
 
     function handleStartGame(data) {
@@ -757,15 +823,10 @@ wss.on('connection', (ws, req) => {
             return;
         }
 
-        logWithTimestamp(`✅ Starting game in room ${currentRoomId} with ${room.players.length} players`);
-
         const questions = data && data.questions ? data.questions : getDefaultMultiplayerQuestions();
         const result = room.startGame(questions);
         
-        if (result.success) {
-            logWithTimestamp(`🎮 Game started successfully in room ${currentRoomId}`);
-            // Don't send individual response - the room will broadcast to all players
-        } else {
+        if (!result.success) {
             ws.send(JSON.stringify({
                 type: MessageType.ERROR,
                 data: { message: result.error }
@@ -773,17 +834,34 @@ wss.on('connection', (ws, req) => {
         }
     }
 
+    // ENHANCED: handlePlayerAnswer with detailed debugging
     function handlePlayerAnswer(data) {
+        logWithTimestamp(`🔍 PLAYER_ANSWER received:`, {
+            playerId,
+            roomId: currentRoomId,
+            answer: data.answer,
+            connectionId,
+            timestamp: new Date().toISOString()
+        });
+
         if (!currentRoomId || !playerId || !data.answer) {
+            const error = 'Invalid answer submission';
+            logWithTimestamp(`❌ ${error}:`, {
+                hasRoom: !!currentRoomId,
+                hasPlayerId: !!playerId,
+                hasAnswer: !!data.answer
+            });
+            
             ws.send(JSON.stringify({
                 type: MessageType.ERROR,
-                data: { message: 'Invalid answer' }
+                data: { message: error }
             }));
             return;
         }
 
         const room = gameRooms.get(currentRoomId);
         if (!room) {
+            logWithTimestamp(`❌ Room not found: ${currentRoomId}`);
             ws.send(JSON.stringify({
                 type: MessageType.ERROR,
                 data: { message: 'Room not found' }
@@ -791,15 +869,17 @@ wss.on('connection', (ws, req) => {
             return;
         }
 
-        room.submitAnswer(playerId, data.answer);
-
-        ws.send(JSON.stringify({
-            type: MessageType.PLAYER_ANSWER,
-            data: {
-                answer: data.answer,
-                success: true
-            }
-        }));
+        // Submit answer to room
+        const result = room.submitAnswer(playerId, data.answer);
+        
+        if (!result.success) {
+            logWithTimestamp(`❌ Failed to submit answer: ${result.error}`);
+            ws.send(JSON.stringify({
+                type: MessageType.ERROR,
+                data: { message: result.error }
+            }));
+        }
+        // Note: Success confirmation is sent by room.submitAnswer()
     }
 });
 
