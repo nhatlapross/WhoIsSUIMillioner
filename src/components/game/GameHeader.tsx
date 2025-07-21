@@ -1,6 +1,8 @@
 // components/game/GameHeader.tsx
 import React from 'react';
-import { Hand, Maximize, Home } from 'lucide-react';
+import { Hand, Maximize, Home, DollarSign } from 'lucide-react';
+import { MILLIONAIRE_PRIZE_LEVELS } from '@/types/game';
+import { formatScore } from '@/utils/gameUtils';
 
 interface GameHeaderProps {
   score: number;
@@ -25,8 +27,14 @@ const GameHeader: React.FC<GameHeaderProps> = ({
             <Hand className="w-8 h-8 text-orange-400" />
             SUI Millionaire
           </h1>
-          <div className="text-xl font-semibold bg-black/40 px-4 py-2 rounded-lg backdrop-blur-sm">
-            Score: <span className="text-yellow-400">{score}</span>/{totalQuestions}
+          <div className="flex items-center gap-4">
+            <div className="text-xl font-semibold bg-black/40 px-4 py-2 rounded-lg backdrop-blur-sm">
+              Question: <span className="text-yellow-400">{currentQuestion + 1}</span>/15
+            </div>
+            <div className="text-xl font-semibold bg-black/40 px-4 py-2 rounded-lg backdrop-blur-sm flex items-center gap-2">
+              <DollarSign className="w-5 h-5 text-green-400" />
+              <span className="text-green-400">{MILLIONAIRE_PRIZE_LEVELS[currentQuestion] || 0} SUI</span>
+            </div>
           </div>
         </div>
         

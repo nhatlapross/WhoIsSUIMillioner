@@ -16,41 +16,41 @@ const GameInstructions: React.FC<GameInstructionsProps> = ({
       <div className="bg-black/60 rounded-lg p-4 backdrop-blur-sm max-w-2xl">
         <h3 className="text-lg font-semibold mb-3 flex items-center justify-center gap-2">
           {useSimpleMode ? <Mouse className="w-5 h-5" /> : <Hand className="w-5 h-5" />}
-          Cách chơi:
+          How to Play:
         </h3>
         <div className="text-sm space-y-2">
           {useSimpleMode ? (
             <div className="flex items-center justify-center gap-6 flex-wrap">
               <div className="flex items-center gap-2">
                 <Mouse className="w-4 h-4" />
-                <span>Nhấp vào đáp án</span>
+                <span>Click on answer</span>
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4" />
-                <span>{timeLimit}s mỗi câu</span>
+                <span>{timeLimit}s per question</span>
               </div>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3 text-left">
               <div className="flex items-center gap-2">
                 <Target className="w-4 h-4 text-orange-400" />
-                <span>Chỉ tay vào đáp án</span>
+                <span>Point finger at answer</span>
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-yellow-400" />
-                <span>{timeLimit}s mỗi câu hỏi</span>
+                <span>{timeLimit}s per question</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 bg-orange-400 rounded-full"></div>
-                <span>Màu cam = đang chỉ</span>
+                <span>Orange = pointing</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 bg-yellow-400 rounded-full"></div>
-                <span>Tự động chọn khi hết giờ</span>
+                <span>Auto-select when time's up</span>
               </div>
               <div className="flex items-center gap-2 col-span-2">
                 <div className="w-4 h-4 bg-red-400 rounded-full"></div>
-                <span>Game over nếu không phát hiện tay quá 3 giây</span>
+                <span>Game over if no hand detected for 3+ seconds</span>
               </div>
             </div>
           )}
@@ -58,8 +58,8 @@ const GameInstructions: React.FC<GameInstructionsProps> = ({
         <div className="mt-3 pt-3 border-t border-white/20">
           <p className="text-xs text-white/60">
             {useSimpleMode ? 
-              'Trả lời đúng để kiếm điểm và nhận thưởng SUI! 🎉' :
-              'Camera đã được flip để dễ điều khiển. Giữ tay trong khung hình! 📹'
+              'Answer correctly to earn points and win SUI rewards! 🎉' :
+              'Camera is flipped for easier control. Keep hand in frame! 📹'
             }
           </p>
         </div>

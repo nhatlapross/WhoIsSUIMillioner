@@ -1,0 +1,427 @@
+/* Mobile gesture optimization styles */
+
+/* Mobile device optimizations */
+.mobile-device {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+/* Mobile landscape game mode optimizations */
+.mobile-landscape-game {
+  overflow: hidden;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+}
+
+.mobile-landscape-mode {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  height: 100%;
+}
+
+/* Hide system UI on mobile landscape */
+.mobile-landscape-game,
+.mobile-landscape-mode {
+  /* iOS Safari */
+  -webkit-overflow-scrolling: touch;
+  /* Android Chrome */
+  -webkit-appearance: none;
+  /* Hide scrollbars */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.mobile-landscape-game::-webkit-scrollbar,
+.mobile-landscape-mode::-webkit-scrollbar {
+  display: none;
+}
+
+/* Mobile landscape answer choices */
+.mobile-landscape-choices {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.mobile-landscape-choices > * {
+  pointer-events: auto;
+}
+
+/* Mobile landscape hand tracking optimizations */
+.mobile-landscape-hand-tracking {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
+/* Mobile landscape UI positioning */
+.mobile-landscape-ui {
+  position: fixed;
+  z-index: 10;
+  font-size: 0.8rem;
+}
+
+.mobile-landscape-ui.top-left {
+  top: 0.5rem;
+  left: 0.5rem;
+}
+
+.mobile-landscape-ui.top-right {
+  top: 0.5rem;
+  right: 0.5rem;
+}
+
+.mobile-landscape-ui.bottom-left {
+  bottom: 0.5rem;
+  left: 0.5rem;
+}
+
+.mobile-landscape-ui.bottom-right {
+  bottom: 0.5rem;
+  right: 0.5rem;
+}
+
+/* Mobile landscape question display */
+.mobile-landscape-question {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  max-width: 60vw;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
+  border-radius: 1rem;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.mobile-landscape-question h2 {
+  font-size: 1.2rem;
+  margin-bottom: 0.5rem;
+  color: white;
+}
+
+.mobile-landscape-question p {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.touch-device {
+  cursor: none !important;
+}
+
+/* Touch target optimization */
+.touch-target-optimized {
+  min-width: 44px !important;
+  min-height: 44px !important;
+  padding: 8px !important;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Screen size specific optimizations */
+.screen-small {
+  --touch-target-size: 48px;
+  --touch-padding: 12px;
+  --font-size-scale: 0.9;
+}
+
+.screen-medium {
+  --touch-target-size: 44px;
+  --touch-padding: 10px;
+  --font-size-scale: 0.95;
+}
+
+.screen-large {
+  --touch-target-size: 40px;
+  --touch-padding: 8px;
+  --font-size-scale: 1;
+}
+
+/* Orientation specific styles */
+.orientation-portrait {
+  --layout-direction: column;
+  --choice-width: 80%;
+  --choice-height: 60px;
+}
+
+.orientation-landscape {
+  --layout-direction: row;
+  --choice-width: 45%;
+  --choice-height: 50px;
+}
+
+/* Mobile gesture feedback */
+.gesture-feedback {
+  animation: gestureRipple 0.6s ease-out;
+  transform-origin: center;
+}
+
+@keyframes gestureRipple {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Touch hover effects */
+.touch-hover {
+  background-color: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.3);
+  transform: scale(1.02);
+  transition: all 0.2s ease;
+}
+
+/* Mobile-specific button styles */
+.mobile-button {
+  min-width: var(--touch-target-size);
+  min-height: var(--touch-target-size);
+  padding: var(--touch-padding);
+  border-radius: 12px;
+  font-size: calc(1rem * var(--font-size-scale));
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.mobile-button::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  transform: translate(-50%, -50%);
+}
+
+.mobile-button:active::before {
+  width: 100%;
+  height: 100%;
+}
+
+/* High contrast mode for better visibility */
+@media (prefers-contrast: high) {
+  .mobile-device {
+    --border-width: 3px;
+    --shadow-intensity: 0.8;
+  }
+  
+  .touch-target-optimized {
+    border-width: var(--border-width);
+    box-shadow: 0 0 10px rgba(0, 0, 0, var(--shadow-intensity));
+  }
+}
+
+/* Reduced motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .mobile-device * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Small screen optimizations */
+@media (max-width: 480px) {
+  .answer-choice {
+    font-size: 0.9rem;
+    padding: 12px;
+    min-height: 56px;
+  }
+  
+  .game-ui {
+    padding: 8px;
+  }
+  
+  .mobile-instructions {
+    bottom: 8px;
+    font-size: 0.8rem;
+  }
+}
+
+/* Medium screen optimizations */
+@media (max-width: 768px) and (min-width: 481px) {
+  .answer-choice {
+    font-size: 1rem;
+    padding: 14px;
+    min-height: 52px;
+  }
+  
+  .game-ui {
+    padding: 12px;
+  }
+}
+
+/* Landscape mobile optimizations */
+@media (max-height: 480px) and (orientation: landscape) {
+  .answer-choice {
+    padding: 8px 12px;
+    min-height: 44px;
+    font-size: 0.9rem;
+  }
+  
+  .game-timer {
+    font-size: 0.9rem;
+  }
+  
+  .mobile-instructions {
+    bottom: 4px;
+    padding: 8px 12px;
+  }
+  
+  /* Mobile landscape specific optimizations */
+  .mobile-landscape-game {
+    height: 100vh;
+    width: 100vw;
+  }
+  
+  .mobile-landscape-choices .answer-choice {
+    font-size: 0.8rem;
+    padding: 6px 10px;
+    min-height: 40px;
+  }
+  
+  .mobile-landscape-ui {
+    font-size: 0.7rem;
+  }
+  
+  .mobile-landscape-question {
+    max-width: 50vw;
+    padding: 0.8rem;
+  }
+  
+  .mobile-landscape-question h2 {
+    font-size: 1rem;
+    margin-bottom: 0.3rem;
+  }
+  
+  .mobile-landscape-question p {
+    font-size: 0.8rem;
+  }
+}
+
+/* iOS specific optimizations */
+@supports (-webkit-touch-callout: none) {
+  .mobile-device {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .touch-target-optimized {
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+  }
+}
+
+/* Android specific optimizations */
+@media (pointer: coarse) {
+  .mobile-button {
+    min-width: 48px;
+    min-height: 48px;
+  }
+  
+  .touch-target-optimized {
+    min-width: 48px !important;
+    min-height: 48px !important;
+  }
+}
+
+/* Haptic feedback visual indicator */
+.haptic-feedback {
+  position: relative;
+}
+
+.haptic-feedback::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: inherit;
+  opacity: 0;
+  animation: hapticPulse 0.2s ease-out;
+  pointer-events: none;
+}
+
+@keyframes hapticPulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+/* Performance optimizations for low-end devices */
+@media (max-width: 320px), (max-height: 568px) {
+  .mobile-device {
+    --animation-duration: 0.2s;
+    --animation-timing: ease-out;
+  }
+  
+  .mobile-device * {
+    animation-duration: var(--animation-duration);
+    animation-timing-function: var(--animation-timing);
+    transition-duration: var(--animation-duration);
+    transition-timing-function: var(--animation-timing);
+  }
+  
+  .backdrop-blur-sm {
+    backdrop-filter: none !important;
+    background-color: rgba(0, 0, 0, 0.8) !important;
+  }
+}
+
+/* Dark mode optimizations */
+@media (prefers-color-scheme: dark) {
+  .mobile-device {
+    --touch-highlight-color: rgba(255, 255, 255, 0.1);
+    --border-color: rgba(255, 255, 255, 0.2);
+  }
+}
+
+/* Light mode optimizations */
+@media (prefers-color-scheme: light) {
+  .mobile-device {
+    --touch-highlight-color: rgba(0, 0, 0, 0.1);
+    --border-color: rgba(0, 0, 0, 0.2);
+  }
+}

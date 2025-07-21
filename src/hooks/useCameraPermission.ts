@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 
 export interface CameraPermissionState {
   status: 'idle' | 'requesting' | 'granted' | 'denied' | 'error';
-  stream: MediaStream | undefined; // Thay đổi từ null thành undefined
+  stream: MediaStream | undefined; // Change from null to undefined
   error: string | null;
   isSupported: boolean;
 }
@@ -12,7 +12,7 @@ export interface CameraPermissionState {
 export function useCameraPermission() {
   const [state, setState] = useState<CameraPermissionState>({
     status: 'idle',
-    stream: undefined, // Thay đổi từ null thành undefined
+    stream: undefined, // Change from null to undefined
     error: null,
     isSupported: typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia
   });
@@ -32,14 +32,27 @@ export function useCameraPermission() {
     setState(prev => ({ ...prev, status: 'requesting', error: null }));
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      // Mobile-optimized camera constraints
+      const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      const constraints = {
         video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: 'user'
+          width: { ideal: isMobile ? 854 : 1280 },
+          height: { ideal: isMobile ? 480 : 720 },
+          facingMode: 'user',
+          // Mobile-specific optimizations
+          ...(isMobile && {
+            aspectRatio: 16/9,
+            frameRate: { ideal: 30, max: 30 },
+            resizeMode: 'crop-and-scale'
+          })
         },
         audio: false
-      });
+      };
+
+      console.log('Requesting camera permission with constraints:', constraints);
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
       streamRef.current = stream;
       setState(prev => ({
@@ -48,17 +61,23 @@ export function useCameraPermission() {
         stream: stream
       }));
 
+      console.log('Camera permission granted, stream:', stream);
+
     } catch (error) {
       console.error('Camera permission error:', error);
       let errorMessage = 'Failed to access camera';
       
       if (error instanceof Error) {
         if (error.name === 'NotAllowedError') {
-          errorMessage = 'Camera permission denied';
+          errorMessage = 'Camera permission denied by user';
         } else if (error.name === 'NotFoundError') {
-          errorMessage = 'No camera found';
+          errorMessage = 'No camera found on device';
         } else if (error.name === 'NotReadableError') {
           errorMessage = 'Camera is being used by another application';
+        } else if (error.name === 'OverconstrainedError') {
+          errorMessage = 'Camera constraints not supported';
+        } else if (error.name === 'SecurityError') {
+          errorMessage = 'Camera access blocked by browser security policy';
         }
       }
 

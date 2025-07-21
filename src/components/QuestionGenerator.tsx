@@ -40,10 +40,16 @@ const QuestionGenerator: React.FC<QuestionGeneratorProps> = ({
     { id: 'technology', name: 'Công nghệ', icon: '💻' }
   ];
 
-  // Load API key from localStorage
+  // Load API key from environment variables or localStorage
   useEffect(() => {
+    const envApiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
     const savedApiKey = localStorage.getItem('gemini_api_key');
-    if (savedApiKey) {
+    
+    if (envApiKey) {
+      setApiKey(envApiKey);
+      setIsApiKeySet(true);
+      initializeGeminiGenerator(envApiKey);
+    } else if (savedApiKey) {
       setApiKey(savedApiKey);
       setIsApiKeySet(true);
       initializeGeminiGenerator(savedApiKey);
@@ -84,8 +90,9 @@ const QuestionGenerator: React.FC<QuestionGeneratorProps> = ({
         questions = await generateQuestions(questionCount, selectedCategories, difficulty);
       }
       
-      setGeneratedQuestions(questions);
-      setShowPreview(true);
+      // Direct to game instead of showing preview
+      onQuestionsGenerated(questions);
+      onClose();
     } catch (err) {
       console.error('Failed to generate questions:', err);
     }

@@ -1,53 +1,110 @@
 // utils/gameUtils.ts
-import { QuizChoice, GameStats, HandLandmark } from '@/types/game';
+import { QuizChoice, GameStats, HandLandmark, MILLIONAIRE_PRIZE_LEVELS, MILLIONAIRE_MILESTONES, SAFE_HAVEN_AMOUNTS } from '@/types/game';
 
-// Create quiz choices with dynamic positioning
-export const createQuizChoices = (screenWidth: number, screenHeight: number): QuizChoice[] => [
-  { 
-    id: 'a', 
-    letter: 'A', 
-    text: 'Hà Nội', 
-    position: { 
-      x: screenWidth * 0.1, 
-      y: screenHeight * 0.4, 
-      width: screenWidth * 0.35, 
-      height: screenHeight * 0.15 
-    } 
-  },
-  { 
-    id: 'b', 
-    letter: 'B', 
-    text: 'Hồ Chí Minh', 
-    position: { 
-      x: screenWidth * 0.55, 
-      y: screenHeight * 0.4, 
-      width: screenWidth * 0.35, 
-      height: screenHeight * 0.15 
-    } 
-  },
-  { 
-    id: 'c', 
-    letter: 'C', 
-    text: 'Đà Nẵng', 
-    position: { 
-      x: screenWidth * 0.1, 
-      y: screenHeight * 0.6, 
-      width: screenWidth * 0.35, 
-      height: screenHeight * 0.15 
-    } 
-  },
-  { 
-    id: 'd', 
-    letter: 'D', 
-    text: 'Cần Thơ', 
-    position: { 
-      x: screenWidth * 0.55, 
-      y: screenHeight * 0.6, 
-      width: screenWidth * 0.35, 
-      height: screenHeight * 0.15 
-    } 
+// Create quiz choices with dynamic positioning optimized for mobile landscape
+export const createQuizChoices = (screenWidth: number, screenHeight: number, isMobileLandscape: boolean = false): QuizChoice[] => {
+  if (isMobileLandscape) {
+    // Optimized for mobile landscape - positions choices for easy hand pointing
+    const margin = 15;
+    const choiceWidth = Math.min(180, (screenWidth - margin * 5) / 2);
+    const choiceHeight = Math.min(50, (screenHeight - margin * 3) / 2);
+    
+    return [
+      { 
+        id: 'a', 
+        letter: 'A', 
+        text: 'Option A', 
+        position: { 
+          x: margin, 
+          y: margin, 
+          width: choiceWidth, 
+          height: choiceHeight 
+        } 
+      },
+      { 
+        id: 'b', 
+        letter: 'B', 
+        text: 'Option B', 
+        position: { 
+          x: screenWidth - choiceWidth - margin, 
+          y: margin, 
+          width: choiceWidth, 
+          height: choiceHeight 
+        } 
+      },
+      { 
+        id: 'c', 
+        letter: 'C', 
+        text: 'Option C', 
+        position: { 
+          x: margin, 
+          y: screenHeight - choiceHeight - margin, 
+          width: choiceWidth, 
+          height: choiceHeight 
+        } 
+      },
+      { 
+        id: 'd', 
+        letter: 'D', 
+        text: 'Option D', 
+        position: { 
+          x: screenWidth - choiceWidth - margin, 
+          y: screenHeight - choiceHeight - margin, 
+          width: choiceWidth, 
+          height: choiceHeight 
+        } 
+      }
+    ];
   }
-];
+  
+  // Default desktop/tablet layout
+  return [
+    { 
+      id: 'a', 
+      letter: 'A', 
+      text: 'Option A', 
+      position: { 
+        x: screenWidth * 0.1, 
+        y: screenHeight * 0.4, 
+        width: screenWidth * 0.35, 
+        height: screenHeight * 0.15 
+      } 
+    },
+    { 
+      id: 'b', 
+      letter: 'B', 
+      text: 'Option B', 
+      position: { 
+        x: screenWidth * 0.55, 
+        y: screenHeight * 0.4, 
+        width: screenWidth * 0.35, 
+        height: screenHeight * 0.15 
+      } 
+    },
+    { 
+      id: 'c', 
+      letter: 'C', 
+      text: 'Option C', 
+      position: { 
+        x: screenWidth * 0.1, 
+        y: screenHeight * 0.6, 
+        width: screenWidth * 0.35, 
+        height: screenHeight * 0.15 
+      } 
+    },
+    { 
+      id: 'd', 
+      letter: 'D', 
+      text: 'Option D', 
+      position: { 
+        x: screenWidth * 0.55, 
+        y: screenHeight * 0.6, 
+        width: screenWidth * 0.35, 
+        height: screenHeight * 0.15 
+      } 
+    }
+  ];
+};
 
 // Check if point is within choice bounds
 export const isPointInChoice = (x: number, y: number, choice: QuizChoice): boolean => {
@@ -59,21 +116,48 @@ export const isPointInChoice = (x: number, y: number, choice: QuizChoice): boole
   );
 };
 
-// Calculate game statistics
+// Calculate millionaire game statistics
 export const calculateGameStats = (
   score: number, 
-  totalQuestions: number, 
+  totalQuestions: number = 15, 
   timeBonus: number = 0
 ): GameStats => {
   const accuracy = Math.round((score / totalQuestions) * 100);
-  const baseScore = score * 100;
-  const finalScore = baseScore + timeBonus;
+  const questionReached = score + 1; // Questions are 1-indexed
+  const isMillionaire = score === 15; // Answered all 15 questions correctly
   
-  let rank = 'Beginner';
-  if (accuracy >= 90) rank = 'Master';
-  else if (accuracy >= 75) rank = 'Expert';
-  else if (accuracy >= 60) rank = 'Good';
-  else if (accuracy >= 40) rank = 'Average';
+  // Calculate prize won and safe haven based on millionaire rules
+  let prizeWon = 0;
+  let safeHavenAmount = 0;
+  
+  if (score > 0) {
+    // Prize is cumulative based on questions answered
+    prizeWon = MILLIONAIRE_PRIZE_LEVELS[score - 1] || 0;
+    
+    // Calculate safe haven amount (guaranteed minimum if player fails after milestone)
+    // Safe havens: Question 5 (0.5 SUI), Question 10 (1.0 SUI)
+    if (score >= 10) {
+      safeHavenAmount = SAFE_HAVEN_AMOUNTS[1]; // 1.0 SUI
+    } else if (score >= 5) {
+      safeHavenAmount = SAFE_HAVEN_AMOUNTS[0]; // 0.5 SUI
+    }
+    
+    // If player failed after reaching a safe haven, they get the safe haven amount
+    // This logic would be handled in the smart contract, but we show it here for UI
+    if (score < 15 && safeHavenAmount > 0) {
+      // Player keeps the safe haven amount as minimum prize
+      prizeWon = Math.max(prizeWon, safeHavenAmount);
+    }
+  }
+  
+  // Rank based on questions reached, not accuracy
+  let rank = 'Contestant';
+  if (isMillionaire) rank = 'SUI MASTER! 🏆';
+  else if (score >= 10) rank = 'High Roller';
+  else if (score >= 5) rank = 'Safe Player';
+  else if (score >= 1) rank = 'Getting Started';
+  
+  const finalScore = prizeWon + timeBonus;
 
   return {
     score,
@@ -82,7 +166,11 @@ export const calculateGameStats = (
     timeBonus,
     accuracy,
     finalScore,
-    rank
+    rank,
+    prizeWon,
+    isMillionaire,
+    questionReached,
+    safeHavenAmount
   };
 };
 
@@ -224,18 +312,18 @@ export const formatScore = (score: number): string => {
   return score.toLocaleString();
 };
 
-// Generate reward message based on score
+// Generate reward message based on millionaire performance
 export const getRewardMessage = (stats: GameStats): string => {
-  if (stats.accuracy >= 90) {
-    return "Perfect performance! You're a true quiz master! 🏆";
-  } else if (stats.accuracy >= 75) {
-    return "Excellent work! Keep up the great performance! 🌟";
-  } else if (stats.accuracy >= 60) {
-    return "Good job! You're getting better! 👏";
-  } else if (stats.accuracy >= 40) {
-    return "Not bad! Practice makes perfect! 💪";
+  if (stats.isMillionaire) {
+    return "CONGRATULATIONS! YOU'RE A SUI MASTER! 🎉💰🏆";
+  } else if (stats.score >= 10) {
+    return `Amazing! You reached the second safe point and won ${stats.prizeWon} SUI! 🌟`;
+  } else if (stats.score >= 5) {
+    return `Great job! You reached the first safe point and won ${stats.prizeWon} SUI! 🎊`;
+  } else if (stats.score >= 1) {
+    return `Good start! You won ${stats.prizeWon} SUI! Keep practicing! 💪`;
   } else {
-    return "Keep trying! Every expert was once a beginner! 🚀";
+    return "Don't give up! Every SUI master started somewhere! 🚀";
   }
 };
 

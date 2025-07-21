@@ -1,6 +1,9 @@
 import './globals.css'
+import '../styles/mobile.css'
+import '../styles/animations.css'
 import { Inter } from 'next/font/google'
 import { Metadata } from 'next'
+import { SuiWalletProvider } from '@/components/providers/SuiWalletProvider'
 
 const inter = Inter({ 
   subsets: ['latin'],
@@ -10,7 +13,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: 'SUI Millionaire - AI Anti-Cheat Game',
   description: 'Blockchain-based quiz game with AI anti-cheat system powered by Sui Network',
-  keywords: ['blockchain', 'quiz', 'game', 'sui', 'ai', 'anti-cheat', 'millionaire'],
+  keywords: ['blockchain', 'quiz', 'game', 'sui', 'ai', 'anti-cheat', 'millionaire', 'wallet'],
   authors: [{ name: 'SUI Millionaire Team' }],
   creator: 'SUI Millionaire',
   publisher: 'SUI Millionaire',
@@ -21,21 +24,21 @@ export const metadata: Metadata = {
     locale: 'vi_VN',
     url: 'https://sui-millionaire.com',
     title: 'SUI Millionaire - AI Anti-Cheat Game',
-    description: 'Play the ultimate blockchain quiz game with AI-powered anti-cheat system',
+    description: 'Play the ultimate blockchain quiz game with AI-powered anti-cheat system and earn real SUI tokens',
     siteName: 'SUI Millionaire',
     images: [
       {
         url: '/images/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'SUI Millionaire Game'
+        alt: 'SUI Millionaire Game - Earn SUI Tokens'
       }
     ]
   },
   twitter: {
     card: 'summary_large_image',
     title: 'SUI Millionaire - AI Anti-Cheat Game',
-    description: 'Play the ultimate blockchain quiz game with AI-powered anti-cheat system',
+    description: 'Play the ultimate blockchain quiz game with AI-powered anti-cheat system and earn real SUI tokens',
     images: ['/images/twitter-image.png'],
     creator: '@sui_millionaire'
   },
@@ -77,8 +80,14 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link rel="preconnect" href="https://cdn.jsdelivr.net" />
         
-        {/* DNS prefetch for AI models */}
+        {/* Preconnect to Sui network endpoints */}
+        <link rel="preconnect" href="https://fullnode.mainnet.sui.io" />
+        <link rel="preconnect" href="https://fullnode.testnet.sui.io" />
+        <link rel="preconnect" href="https://fullnode.devnet.sui.io" />
+        
+        {/* DNS prefetch for wallet providers and AI models */}
         <link rel="dns-prefetch" href="//cdn.jsdelivr.net" />
+        <link rel="dns-prefetch" href="//generativelanguage.googleapis.com" />
         
         {/* Security headers */}
         <meta httpEquiv="X-Content-Type-Options" content="nosniff" />
@@ -88,15 +97,28 @@ export default function RootLayout({
         
         {/* Performance hints */}
         <link rel="preload" href="/fonts/inter-var.woff2" as="font" type="font/woff2" crossOrigin="" />
+        
+        {/* Web3 and Wallet specific meta tags */}
+        <meta name="web3-provider" content="sui" />
+        <meta name="wallet-support" content="sui-wallet,suiet,ethos,martian" />
+        <meta name="blockchain-network" content="sui-mainnet" />
       </head>
       <body className={`${inter.className} antialiased`}>
-        <div id="root">
-          {children}
-        </div>
+        <SuiWalletProvider>
+          <div id="root">
+            {children}
+          </div>
+          
+          {/* Portal for modals and tooltips */}
+          <div id="modal-root"></div>
+          <div id="tooltip-root"></div>
+          <div id="wallet-modal-root"></div>
+        </SuiWalletProvider>
         
-        {/* Portal for modals and tooltips */}
-        <div id="modal-root"></div>
-        <div id="tooltip-root"></div>
+        {/* Wallet connection status indicator for debugging */}
+        {process.env.NODE_ENV === 'development' && (
+          <div id="wallet-debug-info" className="fixed bottom-2 left-2 text-xs opacity-50 z-50"></div>
+        )}
       </body>
     </html>
   )

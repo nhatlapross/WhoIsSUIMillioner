@@ -1,6 +1,6 @@
 // components/GameScreen2.tsx - COMPLETE CLEANED VERSION
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { Camera } from 'lucide-react';
+import { Camera, RotateCcw, Maximize, Smartphone } from 'lucide-react';
 
 // Components
 import GameHeader from '@/components/game/GameHeader';
@@ -11,6 +11,11 @@ import GameOverScreen from '@/components/game/GameOverScreen';
 import HandTrackingCanvas from '@/components/game/HandTrackingCanvas';
 import GameNotifications from '@/components/game/GameNotifications';
 import GameInstructions from '@/components/game/GameInstructions';
+
+// Hooks
+import { useMobileLandscape } from '@/hooks/useMobileLandscape';
+import { useGameTransactions } from '@/hooks/useGameTransactions';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 
 // Types and utilities
 import { 
@@ -38,6 +43,7 @@ interface GameScreenProps {
   onAnswerSelect?: (choiceId: string) => void;
   onHoverChange?: (choiceId: string | null) => void;
   isMultiplayer?: boolean;
+  blockchainGameId?: string | null;
 }
 
 const GameScreen: React.FC<GameScreenProps> = ({ 
@@ -49,7 +55,8 @@ const GameScreen: React.FC<GameScreenProps> = ({
   customGameState = {},
   onAnswerSelect,
   onHoverChange,
-  isMultiplayer = false
+  isMultiplayer = false,
+  blockchainGameId = null
 }) => {
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -59,6 +66,22 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const handsInstanceRef = useRef<any>(null);
   const cameraInstanceRef = useRef<any>(null);
   const lastHoverChangeRef = useRef<string | null>(null);
+  
+  // Remove problematic animation hook
+  
+  // Mobile landscape optimization
+  const { 
+    landscapeState, 
+    forceLandscape, 
+    enterFullscreen, 
+    isMobileLandscape,
+    shouldShowRotationPrompt 
+  } = useMobileLandscape({
+    autoRotate: false,
+    showRotationPrompt: true,
+    forceFullscreen: false,
+    optimizeForHandTracking: true
+  });
   
   // State
   const [screenSize, setScreenSize] = useState({ 
@@ -73,6 +96,12 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const [handDetectionWarning, setHandDetectionWarning] = useState(false);
   const [handDetectionCountdown, setHandDetectionCountdown] = useState(3);
   const [lastHandDetectionTime, setLastHandDetectionTime] = useState(Date.now());
+  const [gameStarted, setGameStarted] = useState(false);
+  const [initialHandDetectionGrace, setInitialHandDetectionGrace] = useState(true);
+  const [currentGameId, setCurrentGameId] = useState<string | null>(null);
+
+  const { startSoloGame, contractStatus } = useGameTransactions();
+  const currentAccount = useCurrentAccount();
   const [gameState, setGameState] = useState<GameState>(() => ({
     currentQuestion: 0,
     selectedChoice: null,
@@ -92,14 +121,14 @@ const GameScreen: React.FC<GameScreenProps> = ({
   
   const getCurrentChoices = useMemo(() => {
     const currentQuestion = activeQuestions[gameState.currentQuestion];
-    const baseChoices = ['Hà Nội', 'Hồ Chí Minh', 'Đà Nẵng', 'Cần Thơ'];
+    const baseChoices = ['Option A', 'Option B', 'Option C', 'Option D'];
     const questionChoices = currentQuestion?.choices || baseChoices;
     
-    return createQuizChoices(screenSize.width, screenSize.height).map((choice, index) => ({
+    return createQuizChoices(screenSize.width, screenSize.height, isMobileLandscape).map((choice, index) => ({
       ...choice,
       text: questionChoices[index] || choice.text
     }));
-  }, [activeQuestions, gameState.currentQuestion, screenSize.width, screenSize.height]);
+  }, [activeQuestions, gameState.currentQuestion, screenSize.width, screenSize.height, isMobileLandscape]);
 
   // Callbacks
   const cleanupMediaPipe = useCallback(() => {
@@ -182,6 +211,13 @@ const GameScreen: React.FC<GameScreenProps> = ({
     const resultDelay = isAutoSelected ? 3000 : 2500;
     
     setTimeout(() => {
+      // MILLIONAIRE RULE: Game ends immediately on wrong answer
+      if (!correct) {
+        setGameState(prev => ({ ...prev, gamePhase: 'gameOver' }));
+        return;
+      }
+      
+      // Continue to next question if correct and not at the end
       if (gameState.currentQuestion < activeQuestions.length - 1) {
         setGameState(prev => ({
           ...prev,
@@ -193,6 +229,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
         }));
         resetTimer();
       } else {
+        // Player answered all 15 questions correctly - MILLIONAIRE!
         setGameState(prev => ({ ...prev, gamePhase: 'gameOver' }));
       }
     }, resultDelay);
@@ -243,6 +280,9 @@ const GameScreen: React.FC<GameScreenProps> = ({
     });
     setLastHandDetectionTime(Date.now());
     setHandDetectionWarning(false);
+    setGameStarted(false);
+    setInitialHandDetectionGrace(true);
+    setCurrentGameId(null); // Reset game ID for new game
     resetTimer();
     
     lastHoverChangeRef.current = null;
@@ -268,8 +308,56 @@ const GameScreen: React.FC<GameScreenProps> = ({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Start solo game when entering game screen
   useEffect(() => {
-    if (!handTrackingEnabled || useSimpleMode || gameState.gamePhase !== 'playing') {
+    const initializeSoloGame = async () => {
+      console.log('Game initialization check:', {
+        isMultiplayer,
+        currentGameId,
+        contractSigned: contractStatus.isSigned,
+        gamePhase: gameState.gamePhase,
+        contractStatus,
+        isConnected: !!currentAccount,
+        userAddress: currentAccount?.address
+      });
+
+      if (!isMultiplayer && !currentGameId && gameState.gamePhase === 'playing') {
+        console.log('🎮 Game initialization check:', {
+          blockchainGameId,
+          isBlockchainGame: !!blockchainGameId,
+          gamePhase: gameState.gamePhase
+        });
+        
+        // Use the blockchain game ID passed from GameStartup if available
+        if (blockchainGameId) {
+          setCurrentGameId(blockchainGameId);
+          console.log('✅ Using blockchain game ID from startup:', blockchainGameId);
+        } else {
+          // Fallback: generate a local game ID for non-blockchain games
+          const localGameId = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          setCurrentGameId(localGameId);
+          console.log('⚠️ Using local game ID (no blockchain):', localGameId);
+        }
+      }
+    };
+
+    initializeSoloGame();
+  }, [isMultiplayer, currentGameId, gameState.gamePhase, blockchainGameId]);
+
+  // Give initial grace period for hand detection
+  useEffect(() => {
+    if (handTrackingEnabled && gameState.gamePhase === 'playing') {
+      const graceTimer = setTimeout(() => {
+        setInitialHandDetectionGrace(false);
+        setGameStarted(true);
+      }, 5000); // 5 second grace period at start
+      
+      return () => clearTimeout(graceTimer);
+    }
+  }, [handTrackingEnabled, gameState.gamePhase]);
+
+  useEffect(() => {
+    if (!handTrackingEnabled || useSimpleMode || gameState.gamePhase !== 'playing' || initialHandDetectionGrace) {
       return;
     }
 
@@ -277,12 +365,13 @@ const GameScreen: React.FC<GameScreenProps> = ({
       const now = Date.now();
       const timeSinceLastDetection = now - lastHandDetectionTime;
       
-      if (timeSinceLastDetection > 3000 && !isMultiplayer) { 
+      // Only check hand detection after game has started and grace period is over
+      if (gameStarted && timeSinceLastDetection > 3000 && !isMultiplayer) { 
         setGameState(prev => ({ ...prev, gamePhase: 'gameOver' }));
         return;
       }
       
-      if (timeSinceLastDetection > 1000) {
+      if (gameStarted && timeSinceLastDetection > 1000) {
         setHandDetectionWarning(true);
         const countdown = Math.ceil((3000 - timeSinceLastDetection) / 1000);
         setHandDetectionCountdown(countdown);
@@ -293,7 +382,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
     const interval = setInterval(checkHandDetection, 100);
     return () => clearInterval(interval);
-  }, [handTrackingEnabled, useSimpleMode, gameState.gamePhase, lastHandDetectionTime, isMultiplayer]);
+  }, [handTrackingEnabled, useSimpleMode, gameState.gamePhase, lastHandDetectionTime, isMultiplayer, gameStarted, initialHandDetectionGrace]);
 
   useEffect(() => {
     if (isMultiplayer) return;
@@ -438,6 +527,66 @@ const GameScreen: React.FC<GameScreenProps> = ({
     };
   }, []);
 
+  // Render mobile rotation prompt - but allow bypass for testing
+  if (shouldShowRotationPrompt && !isMultiplayer && landscapeState.isMobile) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-blue-900 to-purple-900 p-6">
+        <div className="bg-white/10 backdrop-blur-md rounded-3xl p-8 border border-white/20 text-center max-w-md">
+          <div className="mb-6">
+            <div className="w-20 h-20 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Smartphone className="w-10 h-10 text-blue-400 transform rotate-90" />
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-2">Rotate to Landscape</h2>
+            <p className="text-white/70">
+              For the best hand tracking experience, please rotate your device to landscape mode
+            </p>
+          </div>
+          
+          <div className="space-y-4">
+            <button
+              onClick={() => {
+                forceLandscape();
+                enterFullscreen();
+              }}
+              className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-400 hover:to-purple-400 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
+            >
+              <RotateCcw className="w-5 h-5" />
+              Auto Rotate & Play
+            </button>
+            
+            <button
+              onClick={() => {
+                // Force proceed to game even in portrait by bypassing the landscape check
+                console.log('Force proceeding to game in portrait mode');
+                // We need to temporarily disable the landscape prompt
+                window.localStorage.setItem('bypassLandscapePrompt', 'true');
+                window.location.reload();
+              }}
+              className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
+            >
+              <Maximize className="w-5 h-5" />
+              Continue in Portrait
+            </button>
+            
+            <button
+              onClick={onBackToPermission}
+              className="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300"
+            >
+              Back to Menu
+            </button>
+          </div>
+          
+          <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+            <div className="flex items-center gap-2 text-blue-200 text-sm">
+              <span>💡</span>
+              <span>Landscape mode provides better hand tracking accuracy</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Render logic
   if (!handTrackingEnabled || !cameraStream) {
     return (
@@ -475,15 +624,18 @@ const GameScreen: React.FC<GameScreenProps> = ({
           onTryAgain={resetGame}
           onBackToMenu={onBackToPermission}
           isUsingAI={isUsingAI}
+          gameId={currentGameId}
         />
       </div>
     );
   }
 
+  // Remove problematic animation registration
+
   return (
     <div 
       ref={containerRef}
-      className="relative w-full h-screen bg-black overflow-hidden"
+      className="relative w-full h-screen bg-black overflow-hidden game-entrance"
     >
       <video
         ref={videoRef}
@@ -503,24 +655,40 @@ const GameScreen: React.FC<GameScreenProps> = ({
         onHandResults={onResults}
       />
 
-      {handDetectionWarning && !useSimpleMode && gameState.gamePhase === 'playing' && !isMultiplayer && (
+      {handDetectionWarning && !useSimpleMode && gameState.gamePhase === 'playing' && !isMultiplayer && gameStarted && (
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-40">
-          <div className="bg-red-600/95 rounded-xl p-8 text-white text-center backdrop-blur-md border border-red-400/30 animate-pulse">
+          <div className="bg-red-600/95 rounded-xl p-8 text-white text-center backdrop-blur-md border border-red-400/30 hand-detection-warning">
             <div className="text-6xl mb-4">🚨</div>
-            <h3 className="text-3xl font-bold mb-4">Không phát hiện tay!</h3>
+            <h3 className="text-3xl font-bold mb-4">Hand not detected!</h3>
             <div className="text-5xl font-bold mb-4 text-yellow-300">
               {handDetectionCountdown}
             </div>
             <p className="text-xl text-red-100">
-              Hãy đưa tay vào khung hình hoặc game sẽ kết thúc!
+              Please put your hand in frame or the game will end!
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Initial hand detection grace period indicator */}
+      {initialHandDetectionGrace && handTrackingEnabled && gameState.gamePhase === 'playing' && !isMultiplayer && (
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-40">
+          <div className="bg-blue-600/95 rounded-xl p-8 text-white text-center backdrop-blur-md border border-blue-400/30 animate-fade-in">
+            <div className="text-6xl mb-4">👋</div>
+            <h3 className="text-3xl font-bold mb-4">Getting Ready...</h3>
+            <p className="text-xl text-blue-100">
+              Position your hand in front of the camera. Game will start in a moment!
+            </p>
+            <div className="mt-4 flex justify-center">
+              <div className="loading-spinner rounded-full h-8 w-8 border-4 border-blue-300 border-t-transparent"></div>
+            </div>
           </div>
         </div>
       )}
 
       {isUsingAI && !isMultiplayer && (
         <div className="absolute top-6 left-1/2 transform -translate-x-1/2 z-10">
-          <div className="bg-gradient-to-r from-purple-500/90 to-pink-500/90 rounded-full px-4 py-2 text-white text-sm font-bold flex items-center gap-2 backdrop-blur-md border border-purple-400/30">
+          <div className="bg-gradient-to-r from-purple-500/90 to-pink-500/90 rounded-full px-4 py-2 text-white text-sm font-bold flex items-center gap-2 backdrop-blur-md border border-purple-400/30 animate-slide-up">
             <span>🤖</span>
             <span>AI Generated Questions</span>
             <span>✨</span>
@@ -573,6 +741,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
             selectedChoice={gameState.selectedChoice}
             lastHoveredChoice={gameState.lastHoveredChoice}
             correctAnswer={currentQuiz.correctAnswer}
+            currentQuestion={gameState.currentQuestion}
           />
         )}
 

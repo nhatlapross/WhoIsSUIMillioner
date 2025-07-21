@@ -1,0 +1,616 @@
+/* Enhanced UI Animations System */
+
+/* CSS Custom Properties for consistent timing */
+:root {
+  --animation-speed-fast: 0.15s;
+  --animation-speed-normal: 0.3s;
+  --animation-speed-slow: 0.5s;
+  --animation-speed-very-slow: 0.8s;
+  
+  --easing-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --easing-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --easing-sharp: cubic-bezier(0.4, 0, 0.6, 1);
+  --easing-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --easing-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  
+  --glow-primary: 0 0 20px rgba(59, 130, 246, 0.5);
+  --glow-secondary: 0 0 20px rgba(139, 92, 246, 0.5);
+  --glow-success: 0 0 20px rgba(16, 185, 129, 0.5);
+  --glow-warning: 0 0 20px rgba(245, 158, 11, 0.5);
+  --glow-error: 0 0 20px rgba(239, 68, 68, 0.5);
+}
+
+/* Enhanced Button Animations */
+.button-primary {
+  position: relative;
+  overflow: hidden;
+  transition: all var(--animation-speed-normal) var(--easing-smooth);
+  transform: translateZ(0);
+  will-change: transform, box-shadow;
+}
+
+.button-primary::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left var(--animation-speed-slow) var(--easing-smooth);
+  z-index: 1;
+}
+
+.button-primary:hover::before {
+  left: 100%;
+}
+
+.button-primary:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2), var(--glow-primary);
+}
+
+.button-primary:active {
+  transform: translateY(0) scale(0.98);
+  transition: all var(--animation-speed-fast) var(--easing-sharp);
+}
+
+/* Enhanced Card Animations */
+.card-animated {
+  transition: all var(--animation-speed-normal) var(--easing-smooth);
+  transform: translateZ(0);
+  will-change: transform, box-shadow;
+}
+
+.card-animated:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+}
+
+.card-animated:active {
+  transform: translateY(-2px) scale(1.01);
+  transition: all var(--animation-speed-fast) var(--easing-sharp);
+}
+
+/* Game Screen Animations */
+.game-entrance {
+  animation: gameEnter var(--animation-speed-slow) var(--easing-bounce) forwards;
+}
+
+@keyframes gameEnter {
+  0% {
+    opacity: 0;
+    transform: scale(0.8) translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.question-slide-in {
+  animation: slideInFromTop var(--animation-speed-normal) var(--easing-smooth) forwards;
+}
+
+@keyframes slideInFromTop {
+  0% {
+    opacity: 0;
+    transform: translateY(-30px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.answer-choice-enter {
+  animation: answerChoiceEnter var(--animation-speed-normal) var(--easing-bounce) forwards;
+}
+
+@keyframes answerChoiceEnter {
+  0% {
+    opacity: 0;
+    transform: scale(0.8) translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.answer-choice-hover {
+  animation: answerChoiceHover var(--animation-speed-normal) var(--easing-smooth) forwards;
+}
+
+@keyframes answerChoiceHover {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+  100% {
+    transform: scale(1.05);
+    box-shadow: 0 8px 25px rgba(255, 102, 0, 0.3);
+  }
+}
+
+.answer-choice-correct {
+  animation: answerCorrect var(--animation-speed-slow) var(--easing-bounce) forwards;
+}
+
+@keyframes answerCorrect {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+  50% {
+    transform: scale(1.1);
+    box-shadow: 0 12px 30px rgba(16, 185, 129, 0.4);
+  }
+  100% {
+    transform: scale(1.05);
+    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.3);
+  }
+}
+
+.answer-choice-incorrect {
+  animation: answerIncorrect var(--animation-speed-slow) var(--easing-bounce) forwards;
+}
+
+@keyframes answerIncorrect {
+  0% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.05) rotate(2deg);
+  }
+  50% {
+    transform: scale(1.05) rotate(-2deg);
+  }
+  75% {
+    transform: scale(1.05) rotate(1deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+/* Timer Animations */
+.timer-pulse {
+  animation: timerPulse 1s var(--easing-smooth) infinite;
+}
+
+@keyframes timerPulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+.timer-urgent {
+  animation: timerUrgent 0.5s var(--easing-smooth) infinite;
+}
+
+@keyframes timerUrgent {
+  0%, 100% {
+    transform: scale(1);
+    color: #ef4444;
+  }
+  50% {
+    transform: scale(1.1);
+    color: #dc2626;
+  }
+}
+
+/* Hand Tracking Animations */
+.hand-cursor-pulse {
+  animation: handCursorPulse 1.5s var(--easing-smooth) infinite;
+}
+
+@keyframes handCursorPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.8;
+  }
+}
+
+.hand-detection-warning {
+  animation: handDetectionWarning 0.5s var(--easing-smooth) infinite;
+}
+
+@keyframes handDetectionWarning {
+  0%, 100% {
+    transform: scale(1);
+    background-color: rgba(239, 68, 68, 0.95);
+  }
+  50% {
+    transform: scale(1.02);
+    background-color: rgba(220, 38, 38, 0.95);
+  }
+}
+
+/* Loading and State Animations */
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-dots {
+  animation: loadingDots 1.5s var(--easing-smooth) infinite;
+}
+
+@keyframes loadingDots {
+  0%, 20% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.5;
+  }
+  80%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.loading-dots:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.loading-dots:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* Wallet Connection Animations */
+.wallet-connect-pulse {
+  animation: walletConnectPulse 2s var(--easing-smooth) infinite;
+}
+
+@keyframes walletConnectPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+  }
+}
+
+.wallet-connected {
+  animation: walletConnected var(--animation-speed-slow) var(--easing-bounce) forwards;
+}
+
+@keyframes walletConnected {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Modal and Dialog Animations */
+.modal-enter {
+  animation: modalEnter var(--animation-speed-normal) var(--easing-smooth) forwards;
+}
+
+@keyframes modalEnter {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-exit {
+  animation: modalExit var(--animation-speed-fast) var(--easing-sharp) forwards;
+}
+
+@keyframes modalExit {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+  }
+}
+
+.backdrop-enter {
+  animation: backdropEnter var(--animation-speed-normal) var(--easing-smooth) forwards;
+}
+
+@keyframes backdropEnter {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Success and Error Animations */
+.success-bounce {
+  animation: successBounce var(--animation-speed-slow) var(--easing-bounce) forwards;
+}
+
+@keyframes successBounce {
+  0% {
+    transform: scale(0.5) rotate(0deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1) rotate(180deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(360deg);
+    opacity: 1;
+  }
+}
+
+.error-shake {
+  animation: errorShake var(--animation-speed-slow) var(--easing-smooth) forwards;
+}
+
+@keyframes errorShake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  10%, 30%, 50%, 70%, 90% {
+    transform: translateX(-5px);
+  }
+  20%, 40%, 60%, 80% {
+    transform: translateX(5px);
+  }
+}
+
+/* Notification Animations */
+.notification-slide-in {
+  animation: notificationSlideIn var(--animation-speed-normal) var(--easing-smooth) forwards;
+}
+
+@keyframes notificationSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.notification-slide-out {
+  animation: notificationSlideOut var(--animation-speed-normal) var(--easing-smooth) forwards;
+}
+
+@keyframes notificationSlideOut {
+  0% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+/* Score Counter Animation */
+.score-increment {
+  animation: scoreIncrement var(--animation-speed-slow) var(--easing-bounce) forwards;
+}
+
+@keyframes scoreIncrement {
+  0% {
+    transform: scale(1);
+    color: inherit;
+  }
+  50% {
+    transform: scale(1.3);
+    color: #10b981;
+  }
+  100% {
+    transform: scale(1);
+    color: inherit;
+  }
+}
+
+/* Progress Bar Animations */
+.progress-fill {
+  animation: progressFill var(--animation-speed-slow) var(--easing-smooth) forwards;
+}
+
+@keyframes progressFill {
+  0% {
+    transform: scaleX(0);
+  }
+  100% {
+    transform: scaleX(1);
+  }
+}
+
+/* Floating Action Button */
+.fab-bounce {
+  animation: fabBounce 2s var(--easing-smooth) infinite;
+}
+
+@keyframes fabBounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+/* Stagger Animation for Multiple Elements */
+.stagger-animation {
+  animation: staggerFadeIn var(--animation-speed-normal) var(--easing-smooth) forwards;
+}
+
+.stagger-animation:nth-child(1) { animation-delay: 0.1s; }
+.stagger-animation:nth-child(2) { animation-delay: 0.2s; }
+.stagger-animation:nth-child(3) { animation-delay: 0.3s; }
+.stagger-animation:nth-child(4) { animation-delay: 0.4s; }
+.stagger-animation:nth-child(5) { animation-delay: 0.5s; }
+
+@keyframes staggerFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  .loading-spinner {
+    animation: none;
+  }
+  
+  .timer-pulse,
+  .timer-urgent,
+  .hand-cursor-pulse,
+  .hand-detection-warning {
+    animation: none;
+  }
+}
+
+/* High Performance Mode for Low-End Devices */
+@media (max-width: 768px) and (max-height: 480px) {
+  :root {
+    --animation-speed-fast: 0.1s;
+    --animation-speed-normal: 0.2s;
+    --animation-speed-slow: 0.3s;
+    --animation-speed-very-slow: 0.4s;
+  }
+  
+  .button-primary::before {
+    display: none;
+  }
+  
+  .card-animated:hover {
+    transform: translateY(-2px) scale(1.01);
+  }
+}
+
+/* Focus Animations for Accessibility */
+.focus-ring {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  transition: outline-color var(--animation-speed-fast) var(--easing-smooth);
+}
+
+.focus-ring:focus {
+  outline-color: #3b82f6;
+  animation: focusRing var(--animation-speed-normal) var(--easing-smooth) forwards;
+}
+
+@keyframes focusRing {
+  0% {
+    outline-width: 2px;
+  }
+  50% {
+    outline-width: 4px;
+  }
+  100% {
+    outline-width: 2px;
+  }
+}
+
+/* Utility Classes for Common Animations */
+.animate-fade-in {
+  animation: fadeIn var(--animation-speed-normal) var(--easing-smooth) forwards;
+}
+
+@keyframes fadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.animate-fade-out {
+  animation: fadeOut var(--animation-speed-normal) var(--easing-smooth) forwards;
+}
+
+@keyframes fadeOut {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.animate-slide-up {
+  animation: slideUp var(--animation-speed-normal) var(--easing-smooth) forwards;
+}
+
+@keyframes slideUp {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-scale-in {
+  animation: scaleIn var(--animation-speed-normal) var(--easing-bounce) forwards;
+}
+
+@keyframes scaleIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-glow {
+  animation: glow 2s var(--easing-smooth) infinite alternate;
+}
+
+@keyframes glow {
+  0% {
+    box-shadow: 0 0 5px currentColor;
+  }
+  100% {
+    box-shadow: 0 0 20px currentColor;
+  }
+}
